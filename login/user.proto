@@ -1,0 +1,24 @@
+package login;
+//
+message Register {
+  // accout type enum
+  enum AccountType {
+    NONE = 0;
+    SINA = 1;
+    TENCENT = 2;
+    BAIDU = 3;
+    RENREN = 4;
+    TAOBAO = 5;
+    MOMO = 6;
+    DOUBAN = 7;
+    WECHAT = 8;
+  }
+  //
+  message Account {
+    optional AccountType type = 1 [default = NONE];
+    optional string name = 2;
+    optional string token = 3;
+  }
+  //
+  repeated Account accounts = 1;
+}
