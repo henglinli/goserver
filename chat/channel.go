@@ -83,8 +83,7 @@ func NewChannel(id int64) *Channel {
 }
 
 //
-//
-func TestChannel(address string) error {
+func TestChannelServer(address string) error {
 	log.Println("testing Channel...")
 	log.Println("open two terminal and run [telnet localhost 9999]")
 	channels := make([]*Channel, 0)

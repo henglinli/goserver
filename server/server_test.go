@@ -6,8 +6,9 @@ import (
 	"bufio"
 	"testing"
 )
+
 //
-type EchoHandler struct {
+type Client struct {
 	incoming chan string
 	outgoing chan string
 	reader   *bufio.Reader
@@ -15,49 +16,90 @@ type EchoHandler struct {
 }
 
 //
-func (echo *EchoHandler) Read() {
+func (client *Client) Read() {
 	for {
-		line, _ := echo.reader.ReadString('\n')
-		echo.incoming <- line
+		line, err := client.reader.ReadString('\n')
+		if err != nil {
+			log.Println("reader.ReadString error: ", err.Error())
+			close(client.incoming)
+			close(client.outgoing)
+			break
+		}
+		client.incoming <- line
 	}
+	log.Println("reader.Read done")
 }
 
 //
-func (echo *EchoHandler) Write() {
-	for data := range echo.outgoing {
-		echo.writer.WriteString(data)
-		echo.writer.Flush()
+func (client *Client) Write() {
+	for data := range client.outgoing {
+		client.writer.WriteString(data)
+		client.writer.Flush()
 	}
+	log.Println("writer.Write done")
 }
 
 //
-func (echo *EchoHandler) Listen() {
-	go echo.Read()
-	go echo.Write()
+func (client *Client) Listen() {
+	go client.Read()
+	go client.Write()
 }
 
 //
-func NewEchoHandler(connection net.Conn) *EchoHandler {
+func NewClient(connection net.Conn) *Client {
 	writer := bufio.NewWriter(connection)
 	reader := bufio.NewReader(connection)
 
-	echo := &EchoHandler{
+	client := &Client{
 		incoming: make(chan string),
 		outgoing: make(chan string),
 		reader:   reader,
 		writer:   writer,
 	}
-	
-	echo.Listen()
-	
-	return echo
+
+	client.Listen()
+
+	return client
 }
 
-func (echo *EchoHandler) Handle(conn net.Conn) {
+type EchoHandler struct {
+	forward chan string
+}
 
-	echo.Listen()
+func (echo *EchoHandler) Serve(conn net.Conn) {
+	log.Println("EchoHandler.Serve")
+	go func() {
+		defer conn.Close()
+		client := NewClient(conn)
+	loop:   for {
+			log.Println("recv...")
+			select {
+			case recv, ok := <- client.incoming:
+				log.Println(ok, " recv: ", len(recv))
+				if ok == false {
+					break loop
+				}
+				client.outgoing <- recv
+				// client.outgoing <- <- client.incoming
+			}
+			log.Println("re handle...")
+		}
+		log.Println("EchoHandler.Serve done")
+	}()
+}
+
+func NewEchoHandler() *EchoHandler {
+	echo := &EchoHandler {
+		forward: make(chan string),
+	}
+
+	return echo
 }
 
 func TestServer(t *testing.T) {
 	log.Println("testing Server...")
+	
+	echo := NewEchoHandler()
+	server := NewServer(":9999")
+	server.Serve(echo)
 }

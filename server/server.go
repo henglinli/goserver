@@ -15,18 +15,14 @@ const (
 
 type Server struct {
 	address string
-	handlers chan Handler
 	connections chan net.Conn
-	counter chan int64
 	clients int64
 }
 
 func NewServer(addr string) *Server {
 	server := &Server {
 		address: addr,
-		handlers: make(chan Handler),
 		connections: make(chan net.Conn),
-		counter: make(chan int64),
 		clients: 0,
 	}
 	
@@ -34,26 +30,24 @@ func NewServer(addr string) *Server {
 }
 
 // connected clients
-func (server *Server) Clients() int64 {
-	for change := range server.counter {
-		server.clients += change
-	}
+func (server *Server) Clients() int64 {	
 	return server.clients
 }
 
-func (server *Server) Serve() error {
-	// worker queue
+func (server *Server) listen(handler Handler) {
 	for i := 0; i < kGoRoutines; i++ {
 		go func() {
 			for conn := range server.connections {
-				for handler := range server.handlers {
-					server.counter <- 1
-					handler.Serve(conn)
-					server.counter <- -1
-				}
+				log.Println("serve... ", conn)
+				handler.Serve(conn)
 			}
 		}()
 	}
+}
+
+func (server *Server) Serve(handler Handler) error {
+	// worker queue
+	server.listen(handler)
 	// listen
 	ln, err := net.Listen("tcp", server.address)
 	if err != nil {
@@ -61,18 +55,19 @@ func (server *Server) Serve() error {
 		log.Println("net.Listen error: ", err.Error())
 		return err
 	}
+	defer ln.Close()
 	// accept
-	go func() {
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				// handle error
-				log.Println("net.Listen error: ", err.Error())
-				continue
-			}
-			server.connections <- conn
+	//	go func() {
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			// handle error
+			log.Println("net.Listen error: ", err.Error())
+			continue
 		}
-	}()
+		server.connections <- conn
+	}
+	//	}()
 
 	return nil
 }

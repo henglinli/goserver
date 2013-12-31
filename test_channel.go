@@ -13,7 +13,7 @@ func main() {
 	port := flag.String("port", "9999", "server port")
 	flag.Parse()
 	address := *ip + ":" + *port
-	chat.TestChannel(address)
+	chat.TestChannelServer(address)
 	// listen
 /*
 	listener, err := net.Listen("tcp", address)
