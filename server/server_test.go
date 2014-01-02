@@ -5,6 +5,7 @@ import (
 	"net"
 	"bufio"
 	"testing"
+	"../utils"
 )
 
 //
@@ -63,43 +64,61 @@ func NewClient(connection net.Conn) *Client {
 }
 
 type EchoHandler struct {
-	forward chan string
+	// nil
 }
 
-func (echo *EchoHandler) Serve(conn net.Conn) {
-	log.Println("EchoHandler.Serve")
+func (echo *EchoHandler) Handle(conn net.Conn) {
+	log.Println("EchoHandler.Serve ", conn.RemoteAddr())
 	go func() {
 		defer conn.Close()
 		client := NewClient(conn)
 	loop:   for {
 			log.Println("recv...")
 			select {
-			case recv, ok := <- client.incoming:
-				log.Println(ok, " recv: ", len(recv))
+			case recved, ok := <- client.incoming:
+				log.Println(ok, " recv: ", len(recved))
 				if ok == false {
 					break loop
 				}
-				client.outgoing <- recv
+				client.outgoing <- recved
 				// client.outgoing <- <- client.incoming
 			}
-			log.Println("re handle...")
 		}
 		log.Println("EchoHandler.Serve done")
 	}()
-}
-
-func NewEchoHandler() *EchoHandler {
-	echo := &EchoHandler {
-		forward: make(chan string),
-	}
-
-	return echo
+	log.Println("EchoHandler.Serve started")
 }
 
 func TestServer(t *testing.T) {
-	log.Println("testing Server...")
 	
-	echo := NewEchoHandler()
+	if false {
+		log.Println("testing Server...")
+		
+		echo := new(EchoHandler)
+		server := NewServer(":9999")
+		server.Serve(echo)
+		//
+		utils.Wait()
+	}
+}
+
+type FakeMessage struct {
+	// nil	
+}
+func (message *FakeMessage) Read() {
+	// nil
+}
+func (message *FakeMessage) Write() {
+
+}
+func TestDemuxer(t *testing.T) {
+
+	log.Println("testing Server Demuxer...")
+	message := new(FakeMessage)
+	handler := NewDemuxerHandler(message)
 	server := NewServer(":9999")
-	server.Serve(echo)
+	server.Serve(handler)
+	//
+	utils.Wait()
+	
 }

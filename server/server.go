@@ -5,13 +5,9 @@ import (
 	"net"
 )
 
-type Handler interface {
-	Serve(net.Conn)
+type ConnectionHandler interface {
+	Handle(net.Conn)
 }
-
-const (	
-	kGoRoutines = 4
-)
 
 type Server struct {
 	address string
@@ -34,40 +30,39 @@ func (server *Server) Clients() int64 {
 	return server.clients
 }
 
-func (server *Server) listen(handler Handler) {
-	for i := 0; i < kGoRoutines; i++ {
-		go func() {
-			for conn := range server.connections {
-				log.Println("serve... ", conn)
-				handler.Serve(conn)
-			}
-		}()
-	}
+func (server *Server) listen(handler ConnectionHandler) {
+	go func() {
+		for conn := range server.connections {
+			handler.Handle(conn)
+		}
+	}()
 }
 
-func (server *Server) Serve(handler Handler) error {
-	// worker queue
-	server.listen(handler)
+func (server *Server) Serve(handler ConnectionHandler) error {
+	var err error
+	err = nil
+	
+	go func() {
+		server.listen(handler)
 	// listen
-	ln, err := net.Listen("tcp", server.address)
-	if err != nil {
-		// handle error
-		log.Println("net.Listen error: ", err.Error())
-		return err
-	}
-	defer ln.Close()
-	// accept
-	//	go func() {
-	for {
-		conn, err := ln.Accept()
+		ln, e := net.Listen("tcp", server.address)
 		if err != nil {
 			// handle error
 			log.Println("net.Listen error: ", err.Error())
-			continue
+			err = e
+			return
 		}
-		server.connections <- conn
-	}
-	//	}()
-
-	return nil
+		defer ln.Close()
+		// accept
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				// handle error
+				log.Println("net.Listen error: ", err.Error())
+				continue
+			}
+			server.connections <- conn
+		}
+	}()
+	return err
 }

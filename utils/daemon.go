@@ -1,4 +1,4 @@
-package daemon
+package utils
 
 import (
 	"log"
@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-func daemon(nochdir, noclose int) int {
+func Daemon(nochdir, noclose int) int {
 	var ret, ret2 uintptr
 	var err syscall.Errno
 
