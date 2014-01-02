@@ -36,15 +36,15 @@ func (demuxer *Demuxer) Read() {
 	size_buf := bytes.NewReader(boundary[0:4])
 	type_buf := bytes.NewReader(boundary[4:8])
 	buffer := <- demuxer.buffer
-	var message_size int
-	var message_type int
+	var message_size uint32
+	var message_type uint32
 	var err error
 	var readed int
 	for {
 		// read boundary
 		readed, err = io.ReadAtLeast(demuxer.reader, boundary, 8)
 		if err != nil || readed < 8 {
-			log.Println("reader.ReadString error: ", err.Error())
+			log.Println(err.Error())
 			close(demuxer.incoming)
 			close(demuxer.outgoing)
 			break			
@@ -52,25 +52,25 @@ func (demuxer *Demuxer) Read() {
 		// get size
 		err = binary.Read(size_buf, binary.BigEndian, &message_size)
 		if err != nil {
-			log.Println("binary.Read failed: ", err.Error())
+			log.Println(err.Error())
 		}
 		log.Println("message size: ", message_size)
 		// get type
 		err = binary.Read(type_buf, binary.BigEndian, &message_type)
 		if err != nil {
-			log.Println("binary.Read failed: ", err.Error())
+			log.Println(err.Error())
 		}
 		log.Println("message type: ", message_type)
 		// get buffer
 		length := buffer.Len()
-		needed := length - message_size
+		needed := length - int(message_size)
 		if needed > 0 {
 			buffer.Grow(needed)
 		}
 		// get message
-		readed, err = io.ReadAtLeast(demuxer.reader, buffer.Bytes(), message_size)
-		if err != nil || readed < message_size {
-			log.Println("reader.ReadString error: ", err.Error())
+		readed, err = io.ReadAtLeast(demuxer.reader, buffer.Bytes(),int(message_size))
+		if err != nil || readed < int(message_size) {
+			log.Println(err.Error())
 			close(demuxer.incoming)
 			close(demuxer.outgoing)
 			break			
