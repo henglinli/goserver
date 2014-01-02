@@ -4,7 +4,10 @@ import (
 	"flag"
 	"net"
 	"log"
-	"./chat"
+	"os"
+	"os/signal"
+	"syscall"
+	"../chat"
 )
 //
 func main() {
@@ -13,7 +16,19 @@ func main() {
 	port := flag.String("port", "9999", "server port")
 	flag.Parse()
 	address := *ip + ":" + *port
-	chat.TestChannelServer(address)
+	go func() {
+		chat.TestChannelServer(address)
+	}()
+	// 
+	exit_chan := make(chan int)
+	signal_chan := make(chan os.Signal, 1)
+	go func() {
+		<-signal_chan
+		log.Println("Caught signal, exiting...")
+		exit_chan <- 1
+	}()
+	signal.Notify(signal_chan, syscall.SIGINT, syscall.SIGTERM)
+	<- exit_chan
 	// listen
 /*
 	listener, err := net.Listen("tcp", address)

@@ -1,24 +1,119 @@
 package login;
-//
-message Register {
-  // accout type enum
-  enum AccountType {
-    NONE = 0;
-    SINA = 1;
-    TENCENT = 2;
-    BAIDU = 3;
-    RENREN = 4;
-    TAOBAO = 5;
-    MOMO = 6;
-    DOUBAN = 7;
-    WECHAT = 8;
+// message define
+// accout type enum
+enum AccountType {
+  kSelf = 0;
+  kSina = 1;
+  kTencent = 2;
+  kBaidu = 3;
+  kRenren = 4;
+  kTaobao = 5;
+  kMomo = 6;
+  kDouban = 7;
+  kWechat = 8;
+  kEnd = 9;
+}
+// account
+message Account {
+  // type
+  required AccountType type = 1 [default = kSelf]; 
+  // name
+  required string name = 2;
+  // token, hashed password or else
+  required string token = 3;
+  // master email
+  optional string email = 4;
+}
+// Friend 
+message Friend {
+  // name
+  required string name = 2;
+}
+// birthday
+message Birthday {
+  // year
+  required sfixed32 year = 1 [default = 1970];
+  // month
+  enum Month {
+    kNone = 0;
+    kJanuary = 1;
+    kFebruary = 2;
+    kMarch = 3;
+    kApril = 4;
+    kMay = 5;
+    kJune = 6;
+    kJuly = 7;
+    kAugust = 8;
+    kSeptember = 9;
+    kOctober = 10;
+    kNovember = 11;
+    kDecember = 12;
+    kEnd = 13;
   }
-  //
-  message Account {
-    optional AccountType type = 1 [default = NONE];
-    optional string name = 2;
-    optional string token = 3;
+  required Month month = 2 [default = kJanuary];
+  required sfixed32 day = 3 [default = 1];
+}
+// Profile
+message Profile {
+  // gender
+  enum Gender {
+    PRIVATE = 0;
+    MALE = 1;
+    FEMALE = 2;
+    BL = 3;
+    GL = 4;
+    BLG = 5;
+    GLB = 6;
+  }  
+  optional Gender gender = 1 [default = PRIVATE];
+  // birthday
+  optional Birthday birthday = 2;
+  // other email
+  repeated string emails = 3; 
+  // friends
+  repeated Friend friends = 4;
+  // other platform accounts
+  repeated Account accounts = 5;
+}
+// user, db save this
+message User {
+  // acounts
+  repeated Account account = 1;
+  // acounts
+  optional Profile profile = 2;  
+}
+// message transport
+// request
+message Request {
+  // command
+  enum Command {
+    // ping
+    kPing = 0;
+    // register user
+    kRegister = 1;
+    // get profile
+    kLogin = 2;
+    kEnd = 3;
+  } 
+  required Command command = 1 [default = kPing];
+  // body
+  // register
+  optional User register = 2;
+  // login
+  optional Account login = 3;
+}
+// Response
+message Response {
+  enum Status {
+    kOk = 0;
+    kError = 1;
+    kOthers = 2;
   }
-  //
-  repeated Account accounts = 1;
+  // body
+  // other error
+  optional string error = 1;
+  // ping
+  optional string pong = 2;
+  // register or login
+  optional User user = 3;
 }
