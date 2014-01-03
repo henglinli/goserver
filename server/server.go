@@ -10,6 +10,7 @@ type ConnectionHandler interface {
 }
 
 type Server struct {
+	stop chan int
 	address string
 	connections chan net.Conn
 	clients int64
@@ -17,6 +18,7 @@ type Server struct {
 
 func NewServer(addr string) *Server {
 	server := &Server {
+		stop: make(chan int, 1),
 		address: addr,
 		connections: make(chan net.Conn),
 		clients: 0,
@@ -38,13 +40,27 @@ func (server *Server) listen(handler ConnectionHandler) {
 	}()
 }
 
+func (server *Server) Stop() {
+	defer close(server.stop)
+	//
+	log.Println("stopping server...")
+	server.stop <- 1
+}
+//
 func (server *Server) Serve(handler ConnectionHandler) error {
 	var err error
 	err = nil
-	
-	go func() {
-		server.listen(handler)
-	// listen
+	//
+	server.listen(handler)
+	//
+	go func() {	
+		// close connections
+		defer func() {
+			for conn := range server.connections {
+				conn.Close()
+			}
+		}()
+		// listen
 		ln, e := net.Listen("tcp", server.address)
 		if err != nil {
 			// handle error
@@ -52,9 +68,18 @@ func (server *Server) Serve(handler ConnectionHandler) error {
 			err = e
 			return
 		}
+		// close listener
 		defer ln.Close()
 		// accept
 		for {
+			// check should stop
+			select {
+			case <- server.stop:
+				return
+			default:
+				// continue
+			}
+			// accept
 			conn, err := ln.Accept()
 			if err != nil {
 				// handle error

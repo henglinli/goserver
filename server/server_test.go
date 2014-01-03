@@ -102,23 +102,23 @@ func TestServer(t *testing.T) {
 	}
 }
 
-type FakeMessage struct {
+type EchoMessage struct {
 	// nil	
 }
-func (message *FakeMessage) Read() {
-	// nil
-}
-func (message *FakeMessage) Write() {
 
+func (handler *EchoMessage) Handle(message string) string{
+	// nil
+	return message
 }
+
 func TestDemuxer(t *testing.T) {
 
 	log.Println("testing Server Demuxer...")
-	message := new(FakeMessage)
+	message := new(EchoMessage)
 	handler := NewDemuxerHandler(message)
 	server := NewServer(":9999")
 	server.Serve(handler)
 	//
 	utils.Wait()
-	
+	server.Stop()
 }
