@@ -465,15 +465,23 @@ func (m *Request) GetLogin() *Account {
 }
 
 type Response struct {
-	Error            *string `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Pong             *string `protobuf:"bytes,2,opt,name=pong" json:"pong,omitempty"`
-	User             *User   `protobuf:"bytes,3,opt,name=user" json:"user,omitempty"`
-	XXX_unrecognized []byte  `json:"-"`
+	Status           *Response_Status `protobuf:"varint,1,req,name=status,enum=login.Response_Status" json:"status,omitempty"`
+	Error            *string          `protobuf:"bytes,2,opt,name=error" json:"error,omitempty"`
+	Pong             *string          `protobuf:"bytes,3,opt,name=pong" json:"pong,omitempty"`
+	User             *User            `protobuf:"bytes,4,opt,name=user" json:"user,omitempty"`
+	XXX_unrecognized []byte           `json:"-"`
 }
 
 func (m *Response) Reset()         { *m = Response{} }
 func (m *Response) String() string { return proto.CompactTextString(m) }
 func (*Response) ProtoMessage()    {}
+
+func (m *Response) GetStatus() Response_Status {
+	if m != nil && m.Status != nil {
+		return *m.Status
+	}
+	return Response_kOk
+}
 
 func (m *Response) GetError() string {
 	if m != nil && m.Error != nil {

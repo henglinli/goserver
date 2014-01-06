@@ -1,74 +1,41 @@
-package server
+package main
+
 //
 import (
-	"bufio"
-	"net"
+	"./server"
+	"./utils"
+	"./login"
+	"flag"
 	"log"
-	"client"
-)
-//
-const (
-	kRecvBufLen = 2048
 )
 
 //
-type Handler interface {
-	Read(message string) error
-	Write(message string) error
-}
 //
-type Server struct {
-	clients []*client.Client
-	joins chan net.Conn
-	incoming chan string
-	outgoing chan string
+type EchoMessage struct {
+	// nil
 }
-//
-func (service *Server) response(message string) {
-	data
+
+func (handler *EchoMessage) Handle(message []byte) []byte {
+	// nil
+	return message
 }
-//
-func (service *Server) join(conn net.Conn) {
+
+func main() {
+	// flag
+	ip := flag.String("ip", "0.0.0.0", "server ip")
+	port := flag.String("port", "9999", "server port")
+	flag.Parse()
+	address := *ip + ":" + *port
+	//
+	log.Println("starting Server...")
+	//
+	manager := login.NewLoginManager()
 	
-}
-//
-func (service *Server) listen() error {
-	go func() {
-		for {
-			select {
-			case data := service.incoming;
-				service.response(data)
-			case conn := <-service.jions:
-				serice.join(conn)
-			}
-		}
-	}()
-}
-//
-func (service *Server) Serve() error {
-	err := service.listen()
-	if err {
-		return err
-	}
-	listener, err := net.Listen("tcp", service.address)
-	if err {
-		return err
-	}
-	for {
-		conn, err := listener.Accept()
-		if err {
-			log.Println("Accept error: ", err.Error())
-		}
-		service.joins <-conn
-	}
-}
-//
-func NewServer(string address) *Server {
-	service := &Server{
-		clients: make([]*chat.Client, 0)
-		joins: make(chan net.Conn)
-		incoming: make(chan string)
-		outgoing: make(chan string)
-	}
-	return service
+	handler := server.NewDemuxerHandler(manager)
+	s := server.NewServer(address)
+	s.Serve(handler)
+	utils.Wait()
+	s.Stop()
+	//
+	log.Println("Good Bye!")
 }

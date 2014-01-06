@@ -1,97 +1,101 @@
 package server
 
 import (
-	"net"
-	"log"
-	"io"
 	"bufio"
 	"encoding/binary"
-	"container/list"
+	"io"
+	"log"
+	"net"
 )
 
 type MessageHandler interface {
-	Handle(string) string
+	Handle([]byte) []byte
 }
-// bondary 
+
+// bondary
 type Bondary struct {
-	message_size uint32 
-	message_type uint32
-}
-//
-func  GetBondary(b []byte) (s, t uint32) {
-	s = binary.BigEndian.Uint32(b[0:4])
-	t = binary.BigEndian.Uint32(b[4:8])
-	return s,t
-}
-//
-func  SetBondary(s, t uint32, b []byte) {
-	binary.BigEndian.PutUint32(b[0:4], s)
-	binary.BigEndian.PutUint32(b[4:8], t)
-}
-// 1, recv boundary 
-// 2, recv message
-type Demuxer struct {
-	forward chan string
-	reader *bufio.Reader
-	writer *bufio.Writer
-	buffer chan []byte
-//	free_buffer chan []byte
-	message_handler MessageHandler
+	messageSize uint32
+	messageType uint32
 }
 
 //
+func GetBondary(b []byte) (s, t uint32) {
+	s = binary.BigEndian.Uint32(b[0:4])
+	t = binary.BigEndian.Uint32(b[4:8])
+	return s, t
+}
+
+//
+func SetBondary(s, t uint32, b []byte) {
+	binary.BigEndian.PutUint32(b[0:4], s)
+	binary.BigEndian.PutUint32(b[4:8], t)
+}
+
+// 1, recv boundary
+// 2, recv message
+type Demuxer struct {
+	forward        chan string
+	reader         *bufio.Reader
+	writer         *bufio.Writer
+	buffer         chan []byte
+	messageHandler MessageHandler
+}
+
+// read message
 func (demuxer *Demuxer) read(buffer []byte) {
-	//	
-	defer close(demuxer.forward)	
 	//
-	bondary := []byte{0,0,0,0,0,0,0,0}
+	defer close(demuxer.forward)
 	//
-	var message_size uint32
-	var message_type uint32
+	bondary := []byte{0, 0, 0, 0, 0, 0, 0, 0}
+	//
+	var messageSize uint32
+	var messageType uint32
 	var err error
 	var readed int
 	//
-	loop:	for {
+loop:
+	for {
 		log.Println("receiving...")
 		// read boundary
 		readed, err = io.ReadAtLeast(demuxer.reader, bondary, 8)
 		if err != nil || readed < 8 {
 			log.Println("read bondary:", err.Error())
-			break loop			
+			break loop
 		}
 		// get size and type
-		message_size, message_type = GetBondary(bondary)
-		log.Println("message size:", message_size)
-		log.Println("message type:", message_type)
+		messageSize, messageType = GetBondary(bondary)
+		log.Println("message size:", messageSize)
+		log.Println("message type:", messageType)
 		// get buffer
-		needed := len(buffer) - int(message_size)
+		needed := len(buffer) - int(messageSize)
 		if needed < 0 {
 			log.Println("Growing buffer...")
-			buffer = make([]byte, message_size)
+			buffer = make([]byte, messageSize)
 		}
 		// get message
-		readed, err = io.ReadAtLeast(demuxer.reader, buffer, int(message_size))
-		if err != nil || readed < int(message_size) {
+		readed, err = io.ReadAtLeast(demuxer.reader, buffer, int(messageSize))
+		if err != nil || readed < int(messageSize) {
 			log.Println("read message:", err.Error())
-			break loop		
+			break loop
 		}
 		// handle message
-		input := string(buffer[0:message_size])
-		output := demuxer.message_handler.Handle(input)
-		demuxer.forward <- output
+		input := buffer[0:messageSize]
+		output := demuxer.messageHandler.Handle(input)
+		demuxer.forward <- string(output)
 	}
 	log.Println("demuxer.Read done")
 }
 
-//
+// wirite message
 func (demuxer *Demuxer) write() {
 	//
-	bondary := []byte{0,0,0,0,0,0,0,0}
+	bondary := []byte{0, 0, 0, 0, 0, 0, 0, 0}
 	var err error
 	var writen int
 	var size int
 	//
-	loop: for data := range demuxer.forward {
+loop:
+	for data := range demuxer.forward {
 		log.Println("sending...")
 		size = len(data)
 		SetBondary(uint32(size), 0, bondary)
@@ -104,7 +108,7 @@ func (demuxer *Demuxer) write() {
 		//
 		writen, err = demuxer.writer.WriteString(data)
 		if err != nil || writen != len(data) {
-			log.Println(err.Error())			
+			log.Println(err.Error())
 			break loop
 		}
 		//
@@ -116,7 +120,8 @@ func (demuxer *Demuxer) write() {
 	}
 	log.Println("demuxer.Write done")
 }
-//
+
+// no used now
 func (demuxer *Demuxer) listen() {
 	var buffer []byte
 	go demuxer.read(buffer)
@@ -128,20 +133,19 @@ func (demuxer *Demuxer) Demux(buffer []byte) {
 	go demuxer.write()
 	demuxer.read(buffer)
 }
+
 //
 func NewDemuxer(conn net.Conn, handler MessageHandler) *Demuxer {
 	writer := bufio.NewWriter(conn)
 	reader := bufio.NewReader(conn)
 
 	demuxer := &Demuxer{
-		forward: make(chan string),
-		reader:   reader,
-		writer:   writer,
-		buffer : make(chan []byte),
-	//	free_buffer: make(chan []byte),
-		message_handler: handler,
+		forward:        make(chan string),
+		reader:         reader,
+		writer:         writer,
+		buffer:         make(chan []byte),
+		messageHandler: handler,
 	}
-
 	//demuxer.listen()
 
 	return demuxer
@@ -149,7 +153,7 @@ func NewDemuxer(conn net.Conn, handler MessageHandler) *Demuxer {
 
 const (
 	kMaxOnlineClients = 2048
-	kBufferSize = 2048
+	kBufferSize       = 2048
 )
 
 type Buffer struct {
@@ -158,73 +162,72 @@ type Buffer struct {
 
 // impl server.ConnectionHandler
 type DemuxerHandler struct {
-	get, put chan []byte
-	buffers chan [2048]byte
-	message_handler MessageHandler
+	buffers        chan []byte
+	messageHandler MessageHandler
 }
 
-func(handler *DemuxerHandler) Handle(conn net.Conn) {
+func (handler *DemuxerHandler) Handle(conn net.Conn) {
 	log.Println("DemuxerHandler.Handle", conn.RemoteAddr())
 	//
 	go func() {
 		//
 		defer conn.Close()
-		//
-		demuxer := NewDemuxer(conn, handler.message_handler)	
-	        // select buffer
+		// new demuxer
+		demuxer := NewDemuxer(conn, handler.messageHandler)
+		// select buffer
 		var buffer []byte
 		select {
-		case buffer := <- handler.buffers:
+		case buffer = <-handler.buffers:
+			log.Println("reuse buffer", len(buffer))
 			// nil
 		default:
-			buffer = make([]byte, kBufferSize) 
-
+			buffer = make([]byte, kBufferSize)
+			log.Println("make buffer")
 		}
+		//
 		demuxer.Demux(buffer)
 		// give back buffer back into free list
-		handler.put <- buffer
-/*
-	loop:   for {
-			select {
-			case recved, ok := <- demuxer.incoming:
-				if ok == false {
-					break loop
+		handler.buffers <- buffer
+		/*
+			loop:   for {
+					select {
+					case recved, ok := <- demuxer.incoming:
+						if ok == false {
+							break loop
+						}
+						log.Println("redrect recved", len(recved))
+						demuxer.outgoing <- recved
+						// client.outgoing <- <- client.incoming
+					}
 				}
-				log.Println("redrect recved", len(recved))
-				demuxer.outgoing <- recved
-				// client.outgoing <- <- client.incoming
-			}
-		}
-*/
+		*/
 		log.Println("DemuxerHandler.Handle done")
 	}()
 	log.Println("DemuxerHandler.Handle started")
 }
 
-func NewDemuxerHandler(h MessageHandler) *DemuxerHandler{
+func NewDemuxerHandler(h MessageHandler) *DemuxerHandler {
 	handler := &DemuxerHandler{
-		get: make(chan []byte),
-		put: make(chan []byte),
-		buffers: make(chan [kBufferSize], kMaxOnlineClients),
-		message_handler: h,
+		buffers:        make(chan []byte, kMaxOnlineClients),
+		messageHandler: h,
 	}
-/*
-	// buffer generator
-	go func() {
-		for {
-			if handler.buffers.Len() == 0 {
-				handler.buffers.PushFront(Buffer{buffer:})
+	/*
+		// buffer generator
+		go func() {
+			for {
+				if handler.buffers.Len() == 0 {
+					handler.buffers.PushFront(Buffer{buffer:})
+				}
+				front := handler.buffers.Front()
+				select {
+				case back := <-handler.put:
+					handler.buffers.PushFront(back)
+				case handler.get <- front.Value(Buffer):
+					handler.buffers.Remove(front)
+				}
 			}
-			front := handler.buffers.Front()
-			select {
-			case back := <-handler.put:
-				handler.buffers.PushFront(back)
-			case handler.get <- front.Value(Buffer):
-				handler.buffers.Remove(front)
-			}
-		}		
-	}()
-*/
+		}()
+	*/
 	//
 	return handler
 }

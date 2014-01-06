@@ -1,12 +1,14 @@
-package main 
+package main
+
 //
 import (
-	"flag"
-	"net"
-	"log"
 	"../chat"
 	"../utils"
+	"flag"
+	"log"
+	"net"
 )
+
 //
 func main() {
 	// flag
@@ -17,31 +19,33 @@ func main() {
 	go func() {
 		chat.TestChannelServer(address)
 	}()
-	// 
+	//
 	utils.Wait()
 	// listen
-/*
-	listener, err := net.Listen("tcp", address)
-	if nil != err {
-		log.Println("Error listen: " , err.Error())
-		return
-	} else {
-		log.Println("serve at: ", address)
-	}
-	// accept
-	for {
-		connection, err := listener.Accept()
+	/*
+		listener, err := net.Listen("tcp", address)
 		if nil != err {
-			log.Println("Error accept: ", err.Error())
+			log.Println("Error listen: " , err.Error())
 			return
+		} else {
+			log.Println("serve at: ", address)
 		}
-		go Handler(connection)
-	}
-*/
+		// accept
+		for {
+			connection, err := listener.Accept()
+			if nil != err {
+				log.Println("Error accept: ", err.Error())
+				return
+			}
+			go Handler(connection)
+		}
+	*/
 }
+
 const (
 	kRecvBufLen = 2048
 )
+
 // Handler
 func Handler(connection net.Conn) {
 	buf := make([]byte, kRecvBufLen)
@@ -56,7 +60,7 @@ func Handler(connection net.Conn) {
 	// send
 	_, err = connection.Write(buf)
 	if nil != err {
-		log.Println("Error write: ", err.Error())		
+		log.Println("Error write: ", err.Error())
 	} else {
 		log.Println("Relay")
 	}

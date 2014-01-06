@@ -1,5 +1,8 @@
+// login
 package login;
+/////////////////////////////////////////////////////
 // message define
+/////////////////////////////////////////////////////
 // accout type enum
 enum AccountType {
   kSelf = 0;
@@ -82,7 +85,9 @@ message User {
   // acounts
   optional Profile profile = 2;  
 }
+/////////////////////////////////////////////////////
 // message transport
+/////////////////////////////////////////////////////
 // request
 message Request {
   // command
@@ -109,11 +114,13 @@ message Response {
     kError = 1;
     kOthers = 2;
   }
+  // status
+  required Status status = 1;
   // body
   // other error
-  optional string error = 1;
+  optional string error = 2;
   // ping
-  optional string pong = 2;
+  optional string pong = 3;
   // register or login
-  optional User user = 3;
+  optional User user = 4;
 }

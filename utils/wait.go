@@ -1,10 +1,10 @@
 package utils
 
 import (
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"log"
 )
 
 func Wait() {
@@ -16,5 +16,5 @@ func Wait() {
 		exit_chan <- 1
 	}()
 	signal.Notify(signal_chan, syscall.SIGINT, syscall.SIGTERM)
-	<- exit_chan	
+	<-exit_chan
 }

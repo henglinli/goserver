@@ -1,11 +1,11 @@
 package server
 
-import ( 
+import (
+	"../utils"
+	"bufio"
 	"log"
 	"net"
-	"bufio"
 	"testing"
-	"../utils"
 )
 
 //
@@ -72,10 +72,11 @@ func (echo *EchoHandler) Handle(conn net.Conn) {
 	go func() {
 		defer conn.Close()
 		client := NewClient(conn)
-	loop:   for {
+	loop:
+		for {
 			log.Println("recv...")
 			select {
-			case recved, ok := <- client.incoming:
+			case recved, ok := <-client.incoming:
 				log.Println(ok, " recv: ", len(recved))
 				if ok == false {
 					break loop
@@ -90,10 +91,9 @@ func (echo *EchoHandler) Handle(conn net.Conn) {
 }
 
 func TestServer(t *testing.T) {
-	
 	if false {
 		log.Println("testing Server...")
-		
+
 		echo := new(EchoHandler)
 		server := NewServer(":9999")
 		server.Serve(echo)
@@ -103,10 +103,10 @@ func TestServer(t *testing.T) {
 }
 
 type EchoMessage struct {
-	// nil	
+	// nil
 }
 
-func (handler *EchoMessage) Handle(message string) string{
+func (handler *EchoMessage) Handle(message []byte) []byte {
 	// nil
 	return message
 }

@@ -1,22 +1,24 @@
 package main
 
 import (
-	"flag"
-	"log"
-	"net"
-	"fmt"
-	"io"	
 	"bufio"
 	"encoding/binary"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"net"
 )
+
 //
-func  GetBondary(b []byte) (s, t uint32) {
+func GetBondary(b []byte) (s, t uint32) {
 	s = binary.BigEndian.Uint32(b[0:4])
 	t = binary.BigEndian.Uint32(b[4:8])
-	return s,t
+	return s, t
 }
+
 //
-func  SetBondary(s, t uint32, b []byte) {
+func SetBondary(s, t uint32, b []byte) {
 	binary.BigEndian.PutUint32(b[0:4], s)
 	binary.BigEndian.PutUint32(b[4:8], t)
 }
@@ -26,9 +28,9 @@ type Client struct {
 	outgoing chan string
 }
 
-func (client *Client) Connect (address string) error {
+func (client *Client) Connect(address string) error {
 	log.Println("connecting to ", address)
-	conn , err := net.Dial("tcp", address)
+	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return err
 		log.Println(err.Error())
@@ -49,16 +51,17 @@ func (client *Client) read(conn net.Conn) {
 	var buffer []byte
 	reader := bufio.NewReader(conn)
 	//
-	loop:	for {
+loop:
+	for {
 		// wait cann recv
-		<- client.incoming 
+		<-client.incoming
 		//
 		log.Println("receiving...")
 		// read boundary
 		readed, err = io.ReadAtLeast(reader, bondary[0:8], 8)
 		if err != nil || readed < 8 {
 			log.Println("read bondary:", err.Error())
-			break loop			
+			break loop
 		}
 		// get size and type
 		message_size, message_type = GetBondary(bondary[0:8])
@@ -74,7 +77,7 @@ func (client *Client) read(conn net.Conn) {
 		readed, err = io.ReadAtLeast(reader, buffer, int(message_size))
 		if err != nil || readed < int(message_size) {
 			log.Println("read message:", err.Error())
-			break loop		
+			break loop
 		}
 		//
 		log.Println("message: ", string(buffer[0:readed]), readed)
@@ -85,11 +88,12 @@ func (client *Client) read(conn net.Conn) {
 func (client *Client) write(conn net.Conn) {
 	defer close(client.outgoing)
 	//
-	var line string 
+	var line string
 	writer := bufio.NewWriter(conn)
 	bondary := [8]byte{}
-	loop: for {	
-		//	
+loop:
+	for {
+		//
 		n, err := fmt.Scanln(&line)
 		if err != nil {
 			log.Println(err.Error())
@@ -97,7 +101,7 @@ func (client *Client) write(conn net.Conn) {
 		}
 		//
 		select {
-		case <- client.outgoing:
+		case <-client.outgoing:
 			break loop
 		default:
 			// nil
@@ -134,8 +138,8 @@ func (client *Client) handle(conn net.Conn) {
 	client.write(conn)
 }
 
-func NewClient() *Client{
-	client := &Client{ 
+func NewClient() *Client {
+	client := &Client{
 		incoming: make(chan string),
 		outgoing: make(chan string),
 	}

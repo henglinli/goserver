@@ -1,17 +1,18 @@
 package main
 
-import ( 
+import (
 	"fmt"
 	"net"
 )
+
 func main() {
 	counter := 0
-	counter = counter+1
+	counter = counter + 1
 	ch := make(chan string)
 	go func() {
 		ch <- string("hello")
 	}()
-	hello := <- ch
+	hello := <-ch
 	fmt.Println(hello)
 	//
 	listener, _ := net.Listen("tcp", ":6666")
