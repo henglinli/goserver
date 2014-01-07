@@ -1,15 +1,14 @@
 
-struct Boundary {
-       unit64_t message_size_;
-       unit64_t message_type_;
-};
+	struct Boundary {
+       	       unit32_t message_size_;
+	};
 
-struct ProtbufMessage;
+	struct ProtbufMessage;
 
-writer:
-write Boundary;
-write ProtbufMessage;
+	writer:
+	write Boundary;
+	write ProtbufMessage;
 
-reader:
-read Boundary;
-read ProtbufMessage;
+	reader:
+	read Boundary;
+	read ProtbufMessage;

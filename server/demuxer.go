@@ -8,30 +8,22 @@ import (
 	"net"
 )
 
+//
 type MessageHandler interface {
 	Handle([]byte) []byte
 }
 
-// bondary
-type Bondary struct {
-	messageSize uint32
-	messageType uint32
+//
+func GetSize(b []byte) uint32 {
+	return binary.BigEndian.Uint32(b[0:4])
 }
 
 //
-func GetBondary(b []byte) (s, t uint32) {
-	s = binary.BigEndian.Uint32(b[0:4])
-	t = binary.BigEndian.Uint32(b[4:8])
-	return s, t
-}
-
-//
-func SetBondary(s, t uint32, b []byte) {
+func SetSize(s uint32, b []byte) {
 	binary.BigEndian.PutUint32(b[0:4], s)
-	binary.BigEndian.PutUint32(b[4:8], t)
 }
 
-// 1, recv boundary
+// 1, recv size
 // 2, recv message
 type Demuxer struct {
 	forward        chan string
@@ -46,10 +38,9 @@ func (demuxer *Demuxer) read(buffer []byte) {
 	//
 	defer close(demuxer.forward)
 	//
-	bondary := []byte{0, 0, 0, 0, 0, 0, 0, 0}
+	bondary := []byte{0, 0, 0, 0}
 	//
 	var messageSize uint32
-	var messageType uint32
 	var err error
 	var readed int
 	//
@@ -57,15 +48,14 @@ loop:
 	for {
 		log.Println("receiving...")
 		// read boundary
-		readed, err = io.ReadAtLeast(demuxer.reader, bondary, 8)
-		if err != nil || readed < 8 {
+		readed, err = io.ReadAtLeast(demuxer.reader, bondary, 4)
+		if err != nil || readed < 4 {
 			log.Println("read bondary:", err.Error())
 			break loop
 		}
-		// get size and type
-		messageSize, messageType = GetBondary(bondary)
+		// get size
+		messageSize = GetSize(bondary)
 		log.Println("message size:", messageSize)
-		log.Println("message type:", messageType)
 		// get buffer
 		needed := len(buffer) - int(messageSize)
 		if needed < 0 {
@@ -89,7 +79,7 @@ loop:
 // wirite message
 func (demuxer *Demuxer) write() {
 	//
-	bondary := []byte{0, 0, 0, 0, 0, 0, 0, 0}
+	bondary := []byte{0, 0, 0, 0}
 	var err error
 	var writen int
 	var size int
@@ -98,10 +88,10 @@ loop:
 	for data := range demuxer.forward {
 		log.Println("sending...")
 		size = len(data)
-		SetBondary(uint32(size), 0, bondary)
+		SetSize(uint32(size), bondary)
 		//
 		writen, err = demuxer.writer.Write(bondary)
-		if err != nil || writen != 8 {
+		if err != nil || writen != 4 {
 			log.Println(err.Error())
 			break loop
 		}

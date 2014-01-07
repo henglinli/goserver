@@ -8,21 +8,19 @@ import (
 	"io"
 	"log"
 	"net"
+	//"code.google.com/p/goprotobuf/proto"
 )
-
 //
-func GetBondary(b []byte) (s, t uint32) {
-	s = binary.BigEndian.Uint32(b[0:4])
-	t = binary.BigEndian.Uint32(b[4:8])
-	return s, t
+func GetSize(b []byte) uint32 {
+	return binary.BigEndian.Uint32(b[0:4])
 }
 
 //
-func SetBondary(s, t uint32, b []byte) {
+func SetSize(s uint32, b []byte) {
 	binary.BigEndian.PutUint32(b[0:4], s)
-	binary.BigEndian.PutUint32(b[4:8], t)
 }
 
+//
 type Client struct {
 	incoming chan string
 	outgoing chan string
@@ -44,12 +42,14 @@ func (client *Client) read(conn net.Conn) {
 	defer close(client.incoming)
 	defer conn.Close()
 	//
-	bondary := [8]byte{}
-	var message_size, message_type uint32
+	bondary := [4]byte{}
+	var messageSize uint32
 	var err error
 	var readed int
 	var buffer []byte
 	reader := bufio.NewReader(conn)
+	//
+	//message := proto.NewBuffer(nil)
 	//
 loop:
 	for {
@@ -58,29 +58,29 @@ loop:
 		//
 		log.Println("receiving...")
 		// read boundary
-		readed, err = io.ReadAtLeast(reader, bondary[0:8], 8)
-		if err != nil || readed < 8 {
+		readed, err = io.ReadAtLeast(reader, bondary[0:4], 4)
+		if err != nil || readed < 4 {
 			log.Println("read bondary:", err.Error())
 			break loop
 		}
 		// get size and type
-		message_size, message_type = GetBondary(bondary[0:8])
-		log.Println("message size:", message_size)
-		log.Println("message type:", message_type)
+		messageSize = GetSize(bondary[0:4])
+		log.Println("message size:", messageSize)
 		// get buffer
-		needed := len(buffer) - int(message_size)
+		needed := len(buffer) - int(messageSize)
 		if needed < 0 {
 			log.Println("Growing buffer...")
-			buffer = make([]byte, message_size)
+			buffer = make([]byte, messageSize)
 		}
 		// get message
-		readed, err = io.ReadAtLeast(reader, buffer, int(message_size))
-		if err != nil || readed < int(message_size) {
+		readed, err = io.ReadAtLeast(reader, buffer, int(messageSize))
+		if err != nil || readed < int(messageSize) {
 			log.Println("read message:", err.Error())
 			break loop
 		}
 		//
-		log.Println("message: ", string(buffer[0:readed]), readed)
+		// message.DebugPrint("message", buffer[0:readed])
+		log.Println(string(buffer[0:readed]))
 	}
 	client.outgoing <- "closed"
 }
@@ -108,9 +108,11 @@ loop:
 		}
 		size := len(line)
 		log.Println("sending bondary...")
-		SetBondary(uint32(size), 0, bondary[0:8])
-		n, err = writer.Write(bondary[0:8])
-		if err != nil || n != 8 {
+		//
+		SetSize(uint32(size), bondary[0:4])
+		//
+		n, err = writer.Write(bondary[0:4])
+		if err != nil || n != 4 {
 			log.Println(err.Error())
 			break loop
 		}
@@ -133,11 +135,13 @@ loop:
 	}
 }
 
+//
 func (client *Client) handle(conn net.Conn) {
 	go client.read(conn)
 	client.write(conn)
 }
 
+//
 func NewClient() *Client {
 	client := &Client{
 		incoming: make(chan string),

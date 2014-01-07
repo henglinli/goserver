@@ -1,5 +1,11 @@
 // login
 package login;
+//
+option java_package = "com.stargaze.login";
+//option java_outer_classname = "Login";
+//
+option optimize_for = SPEED;
+
 /////////////////////////////////////////////////////
 // message define
 /////////////////////////////////////////////////////
@@ -60,15 +66,16 @@ message Birthday {
 message Profile {
   // gender
   enum Gender {
-    PRIVATE = 0;
-    MALE = 1;
-    FEMALE = 2;
-    BL = 3;
-    GL = 4;
-    BLG = 5;
-    GLB = 6;
+    kPrivate = 0;
+    kMale = 1;
+    kFemale = 2;
+    kBL = 3;
+    kGL = 4;
+    kBLG = 5;
+    kGLB = 6;
+    kEnd = 7;
   }  
-  optional Gender gender = 1 [default = PRIVATE];
+  optional Gender gender = 1 [default = kPrivate];
   // birthday
   optional Birthday birthday = 2;
   // other email
@@ -90,6 +97,8 @@ message User {
 /////////////////////////////////////////////////////
 // request
 message Request {
+  // type
+  required uint32 type = 1 [default = 0];
   // command
   enum Command {
     // ping
@@ -100,27 +109,30 @@ message Request {
     kLogin = 2;
     kEnd = 3;
   } 
-  required Command command = 1 [default = kPing];
+  required Command command = 2 [default = kPing];
   // body
   // register
-  optional User register = 2;
+  optional User register = 3;
   // login
-  optional Account login = 3;
+  optional Account login = 4;
 }
 // Response
 message Response {
+  // type
+  required uint32 type = 1 [default = 0];
+  //
   enum Status {
     kOk = 0;
     kError = 1;
-    kOthers = 2;
+    kEnd = 2; //
   }
   // status
-  required Status status = 1;
+  required Status status = 2 [default = kOk];
   // body
-  // other error
-  optional string error = 2;
   // ping
   optional string pong = 3;
+  // error
+  optional string error = 4;
   // register or login
-  optional User user = 4;
+  optional User user = 5;
 }

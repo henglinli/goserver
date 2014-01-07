@@ -1,14 +1,17 @@
 package server
 
+//
 import (
 	"log"
 	"net"
 )
 
+//
 type ConnectionHandler interface {
 	Handle(net.Conn)
 }
 
+//
 type Server struct {
 	stop        chan int
 	address     string
@@ -16,6 +19,7 @@ type Server struct {
 	clients     int64
 }
 
+//
 func NewServer(addr string) *Server {
 	server := &Server{
 		stop:        make(chan int, 1),
@@ -23,7 +27,7 @@ func NewServer(addr string) *Server {
 		connections: make(chan net.Conn),
 		clients:     0,
 	}
-
+	//
 	return server
 }
 
@@ -32,6 +36,7 @@ func (server *Server) Clients() int64 {
 	return server.clients
 }
 
+//
 func (server *Server) listen(handler ConnectionHandler) {
 	go func() {
 		for conn := range server.connections {
@@ -40,6 +45,7 @@ func (server *Server) listen(handler ConnectionHandler) {
 	}()
 }
 
+//
 func (server *Server) Stop() {
 	defer close(server.stop)
 	//
@@ -87,8 +93,10 @@ func (server *Server) Serve(handler ConnectionHandler) error {
 				log.Println("net.Listen error: ", err.Error())
 				continue
 			}
+			//
 			server.connections <- conn
 		}
 	}()
+	//
 	return err
 }
