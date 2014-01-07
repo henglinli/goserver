@@ -1,8 +1,8 @@
 package server
 
 import (
+	"../message"
 	"bufio"
-	"encoding/binary"
 	"io"
 	"log"
 	"net"
@@ -13,32 +13,23 @@ type MessageHandler interface {
 	Handle([]byte) []byte
 }
 
-//
-func GetSize(b []byte) uint32 {
-	return binary.BigEndian.Uint32(b[0:4])
-}
-
-//
-func SetSize(s uint32, b []byte) {
-	binary.BigEndian.PutUint32(b[0:4], s)
-}
-
-// 1, recv size
+// 1, recv header
 // 2, recv message
 type Demuxer struct {
-	forward        chan string
-	reader         *bufio.Reader
-	writer         *bufio.Writer
-	buffer         chan []byte
-	messageHandler MessageHandler
+	// reader to writer channel
+	forward chan []byte
+	reader  *bufio.Reader
+	writer  *bufio.Writer
+	buffer  chan []byte
+	handler MessageHandler
 }
 
 // read message
-func (demuxer *Demuxer) read(buffer []byte) {
+func (this *Demuxer) read(buffer []byte) {
 	//
-	defer close(demuxer.forward)
+	defer close(this.forward)
 	//
-	bondary := []byte{0, 0, 0, 0}
+	header := message.NewDefaultHeader()
 	//
 	var messageSize uint32
 	var err error
@@ -47,15 +38,23 @@ func (demuxer *Demuxer) read(buffer []byte) {
 loop:
 	for {
 		log.Println("receiving...")
-		// read boundary
-		readed, err = io.ReadAtLeast(demuxer.reader, bondary, 4)
-		if err != nil || readed < 4 {
-			log.Println("read bondary:", err.Error())
+		// read header
+		readed, err = io.ReadAtLeast(this.reader,
+			header[:],
+			len(header))
+
+		if err != nil || readed != len(header) {
+			log.Println("read header:", err.Error())
+			break loop
+		}
+		// check maigc
+		ok := header.CheckMagic()
+		if ok != true {
+			log.Println("*Inllegal client, magic:", header.GetMagic())
 			break loop
 		}
 		// get size
-		messageSize = GetSize(bondary)
-		log.Println("message size:", messageSize)
+		messageSize = header.GetSize()
 		// get buffer
 		needed := len(buffer) - int(messageSize)
 		if needed < 0 {
@@ -63,80 +62,78 @@ loop:
 			buffer = make([]byte, messageSize)
 		}
 		// get message
-		readed, err = io.ReadAtLeast(demuxer.reader, buffer, int(messageSize))
+		readed, err = io.ReadAtLeast(this.reader, buffer, int(messageSize))
 		if err != nil || readed < int(messageSize) {
 			log.Println("read message:", err.Error())
 			break loop
 		}
 		// handle message
 		input := buffer[0:messageSize]
-		output := demuxer.messageHandler.Handle(input)
-		demuxer.forward <- string(output)
+		output := this.handler.Handle(input)
+		this.forward <- output
 	}
-	log.Println("demuxer.Read done")
+	log.Println("Demuxer.Read done")
 }
 
 // wirite message
-func (demuxer *Demuxer) write() {
-	//
-	bondary := []byte{0, 0, 0, 0}
+func (this *Demuxer) write() {
+	header := message.NewDefaultHeader()
 	var err error
 	var writen int
 	var size int
 	//
 loop:
-	for data := range demuxer.forward {
-		log.Println("sending...")
+	for data := range this.forward {
 		size = len(data)
-		SetSize(uint32(size), bondary)
+		header.SetSize(uint32(size))
 		//
-		writen, err = demuxer.writer.Write(bondary)
-		if err != nil || writen != 4 {
+		writen, err = this.writer.Write(header[:])
+		if err != nil || writen != len(header) {
 			log.Println(err.Error())
 			break loop
 		}
 		//
-		writen, err = demuxer.writer.WriteString(data)
+		writen, err = this.writer.Write(data)
 		if err != nil || writen != len(data) {
 			log.Println(err.Error())
 			break loop
 		}
 		//
-		err = demuxer.writer.Flush()
+		err = this.writer.Flush()
 		if err != nil {
 			log.Println(err.Error())
 			break loop
 		}
 	}
-	log.Println("demuxer.Write done")
+	log.Println("Demuxer.Write done")
 }
 
 // no used now
-func (demuxer *Demuxer) listen() {
+func (this *Demuxer) listen() {
 	var buffer []byte
-	go demuxer.read(buffer)
-	go demuxer.write()
+	go this.read(buffer)
+	go this.write()
 }
 
 //
-func (demuxer *Demuxer) Demux(buffer []byte) {
-	go demuxer.write()
-	demuxer.read(buffer)
+func (this *Demuxer) Demux(buffer []byte) {
+	go this.write()
+	this.read(buffer)
 }
 
 //
-func NewDemuxer(conn net.Conn, handler MessageHandler) *Demuxer {
+func NewDemuxer(conn net.Conn, h MessageHandler) *Demuxer {
 	writer := bufio.NewWriter(conn)
 	reader := bufio.NewReader(conn)
 
 	demuxer := &Demuxer{
-		forward:        make(chan string),
-		reader:         reader,
-		writer:         writer,
-		buffer:         make(chan []byte),
-		messageHandler: handler,
+		forward: make(chan []byte),
+		reader:  reader,
+		writer:  writer,
+		buffer:  make(chan []byte),
+		handler: h,
 	}
-	//demuxer.listen()
+	//this.listen()
 
 	return demuxer
 }
@@ -146,28 +143,24 @@ const (
 	kBufferSize       = 2048
 )
 
-type Buffer struct {
-	buffer []byte
-}
-
 // impl server.ConnectionHandler
 type DemuxerHandler struct {
 	buffers        chan []byte
 	messageHandler MessageHandler
 }
 
-func (handler *DemuxerHandler) Handle(conn net.Conn) {
+func (this *DemuxerHandler) Handle(conn net.Conn) {
 	log.Println("DemuxerHandler.Handle", conn.RemoteAddr())
 	//
 	go func() {
 		//
 		defer conn.Close()
 		// new demuxer
-		demuxer := NewDemuxer(conn, handler.messageHandler)
+		demuxer := NewDemuxer(conn, this.messageHandler)
 		// select buffer
 		var buffer []byte
 		select {
-		case buffer = <-handler.buffers:
+		case buffer = <-this.buffers:
 			log.Println("reuse buffer", len(buffer))
 			// nil
 		default:
@@ -177,20 +170,8 @@ func (handler *DemuxerHandler) Handle(conn net.Conn) {
 		//
 		demuxer.Demux(buffer)
 		// give back buffer back into free list
-		handler.buffers <- buffer
-		/*
-			loop:   for {
-					select {
-					case recved, ok := <- demuxer.incoming:
-						if ok == false {
-							break loop
-						}
-						log.Println("redrect recved", len(recved))
-						demuxer.outgoing <- recved
-						// client.outgoing <- <- client.incoming
-					}
-				}
-		*/
+		this.buffers <- buffer
+		//
 		log.Println("DemuxerHandler.Handle done")
 	}()
 	log.Println("DemuxerHandler.Handle started")
@@ -198,26 +179,9 @@ func (handler *DemuxerHandler) Handle(conn net.Conn) {
 
 func NewDemuxerHandler(h MessageHandler) *DemuxerHandler {
 	handler := &DemuxerHandler{
-		buffers:        make(chan []byte, kMaxOnlineClients),
+		buffers:        make(chan []byte, kMaxOnlineClients*2),
 		messageHandler: h,
 	}
-	/*
-		// buffer generator
-		go func() {
-			for {
-				if handler.buffers.Len() == 0 {
-					handler.buffers.PushFront(Buffer{buffer:})
-				}
-				front := handler.buffers.Front()
-				select {
-				case back := <-handler.put:
-					handler.buffers.PushFront(back)
-				case handler.get <- front.Value(Buffer):
-					handler.buffers.Remove(front)
-				}
-			}
-		}()
-	*/
-	//
+
 	return handler
 }

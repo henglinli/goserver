@@ -12,4 +12,8 @@ func main() {
 		fmt.Println(len(buffer))
 	}()
 	ch <- buf[:]
+
+	//
+	copy(buf[0:5], string("hello"))
+	fmt.Println(buf)
 }

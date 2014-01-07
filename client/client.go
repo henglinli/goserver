@@ -8,7 +8,7 @@ import (
 	"io"
 	"log"
 	"net"
-	//"code.google.com/p/goprotobuf/proto"
+	"../message"
 )
 //
 func GetSize(b []byte) uint32 {
@@ -22,49 +22,50 @@ func SetSize(s uint32, b []byte) {
 
 //
 type Client struct {
+	rheader *message.DefaultHeader
+	wheader *message.DefaultHeader
 	incoming chan string
 	outgoing chan string
 }
 
-func (client *Client) Connect(address string) error {
+func (this *Client) Connect(address string) error {
 	log.Println("connecting to ", address)
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return err
 		log.Println(err.Error())
 	}
-	log.Println("connectd ", conn.RemoteAddr())
-	client.handle(conn)
+	log.Println("connected ", conn.RemoteAddr())
+	this.handle(conn)
 	return nil
 }
 
-func (client *Client) read(conn net.Conn) {
-	defer close(client.incoming)
+func (this *Client) read(conn net.Conn) {
+	defer close(this.incoming)
 	defer conn.Close()
-	//
-	bondary := [4]byte{}
+	//	
 	var messageSize uint32
 	var err error
 	var readed int
 	var buffer []byte
 	reader := bufio.NewReader(conn)
 	//
-	//message := proto.NewBuffer(nil)
-	//
 loop:
 	for {
 		// wait cann recv
-		<-client.incoming
+		<-this.incoming
 		//
 		log.Println("receiving...")
 		// read boundary
-		readed, err = io.ReadAtLeast(reader, bondary[0:4], 4)
+		readed, err = io.ReadAtLeast(reader, 
+			this.rheader[:],
+			len(this.rheader))
 		if err != nil || readed < 4 {
 			log.Println("read bondary:", err.Error())
 			break loop
 		}
 		// get size and type
-		messageSize = GetSize(bondary[0:4])
+		messageSize = this.rheader.GetSize()
 		log.Println("message size:", messageSize)
 		// get buffer
 		needed := len(buffer) - int(messageSize)
@@ -82,15 +83,14 @@ loop:
 		// message.DebugPrint("message", buffer[0:readed])
 		log.Println(string(buffer[0:readed]))
 	}
-	client.outgoing <- "closed"
+	this.outgoing <- "closed"
 }
 
-func (client *Client) write(conn net.Conn) {
-	defer close(client.outgoing)
+func (this *Client) write(conn net.Conn) {
+	defer close(this.outgoing)
 	//
 	var line string
 	writer := bufio.NewWriter(conn)
-	bondary := [8]byte{}
 loop:
 	for {
 		//
@@ -101,18 +101,19 @@ loop:
 		}
 		//
 		select {
-		case <-client.outgoing:
+		case <-this.outgoing:
 			break loop
 		default:
 			// nil
 		}
 		size := len(line)
-		log.Println("sending bondary...")
+		log.Println("sending header...")
 		//
-		SetSize(uint32(size), bondary[0:4])
+		this.wheader.SetSize(uint32(size))
+		log.Println(this.wheader)
 		//
-		n, err = writer.Write(bondary[0:4])
-		if err != nil || n != 4 {
+		n, err = writer.Write(this.wheader[:])
+		if err != nil || n != len(this.wheader) {
 			log.Println(err.Error())
 			break loop
 		}
@@ -131,19 +132,21 @@ loop:
 			break loop
 		}
 		//
-		client.incoming <- "yes"
+		this.incoming <- "yes"
 	}
 }
 
 //
-func (client *Client) handle(conn net.Conn) {
-	go client.read(conn)
-	client.write(conn)
+func (this *Client) handle(conn net.Conn) {
+	go this.read(conn)
+	this.write(conn)
 }
 
 //
 func NewClient() *Client {
 	client := &Client{
+		rheader: message.NewDefaultHeader(),
+		wheader: message.NewDefaultHeader(),
 		incoming: make(chan string),
 		outgoing: make(chan string),
 	}
