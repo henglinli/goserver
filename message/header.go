@@ -4,21 +4,28 @@ import (
 	"encoding/binary"
 )
 
+type Header interface {
+	GetSize() uint32
+	GetMagic() string
+	SetSize(uint32)
+	//SetMagic(string)
+}
+
 // message header
-type Header struct {
+type DynamicHeader struct {
 	magiclen int    // magic lenght
 	size     uint32 // message length
 	buffer   []byte
 }
 
 // get
-func (this *Header) Get() []byte {
+func (this *DynamicHeader) Get() []byte {
 	return this.buffer
 }
 
 //
-func NewHeader(m string, s uint32) *Header {
-	header := &Header{
+func NewDynamicHeader(m string, s uint32) *DynamicHeader {
+	header := &DynamicHeader{
 		magiclen: len(m),
 		size:     s,
 		buffer:   make([]byte, len(m)+4),
@@ -86,4 +93,25 @@ func (this *TinyHeader) GetSize() uint32 {
 // set size
 func (this *TinyHeader) SetSize(s uint32) {
 	binary.BigEndian.PutUint32(this[0:4], s)
+}
+
+//
+func (this *TinyHeader) CheckMagic() bool {
+	return true
+}
+
+// get magic
+func (this *TinyHeader) GetMagic() string {
+	return ""
+}
+
+// len
+func (this *TinyHeader) Len() int {
+	return 4
+}
+
+// new
+func NewTinyHeader() *TinyHeader {
+	header := &TinyHeader{}
+	return header
 }

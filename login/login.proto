@@ -1,7 +1,7 @@
 // login
 package login;
 //
-option java_package = "com.stargaze.login";
+option java_package = "Stargaze";
 //option java_outer_classname = "Login";
 //
 option optimize_for = SPEED;
@@ -9,23 +9,23 @@ option optimize_for = SPEED;
 /////////////////////////////////////////////////////
 // message define
 /////////////////////////////////////////////////////
-// accout type enum
-enum AccountType {
-  kSelf = 0;
-  kSina = 1;
-  kTencent = 2;
-  kBaidu = 3;
-  kRenren = 4;
-  kTaobao = 5;
-  kMomo = 6;
-  kDouban = 7;
-  kWechat = 8;
-  kEnd = 9;
-}
 // account
 message Account {
+  // accout type enum
+  enum Type {
+    kSelf = 0;
+    kSina = 1;
+    kTencent = 2;
+    kBaidu = 3;
+    kRenren = 4;
+    kTaobao = 5;
+    kMomo = 6;
+    kDouban = 7;
+    kWechat = 8;
+    kEnd = 9;
+  }
   // type
-  required AccountType type = 1 [default = kSelf]; 
+  required Type type = 1 [default = kSelf]; 
   // name
   required string name = 2;
   // token, hashed password or else

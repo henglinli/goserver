@@ -13,22 +13,22 @@ var _ = proto.Marshal
 var _ = &json.SyntaxError{}
 var _ = math.Inf
 
-type AccountType int32
+type Account_Type int32
 
 const (
-	AccountType_kSelf    AccountType = 0
-	AccountType_kSina    AccountType = 1
-	AccountType_kTencent AccountType = 2
-	AccountType_kBaidu   AccountType = 3
-	AccountType_kRenren  AccountType = 4
-	AccountType_kTaobao  AccountType = 5
-	AccountType_kMomo    AccountType = 6
-	AccountType_kDouban  AccountType = 7
-	AccountType_kWechat  AccountType = 8
-	AccountType_kEnd     AccountType = 9
+	Account_kSelf    Account_Type = 0
+	Account_kSina    Account_Type = 1
+	Account_kTencent Account_Type = 2
+	Account_kBaidu   Account_Type = 3
+	Account_kRenren  Account_Type = 4
+	Account_kTaobao  Account_Type = 5
+	Account_kMomo    Account_Type = 6
+	Account_kDouban  Account_Type = 7
+	Account_kWechat  Account_Type = 8
+	Account_kEnd     Account_Type = 9
 )
 
-var AccountType_name = map[int32]string{
+var Account_Type_name = map[int32]string{
 	0: "kSelf",
 	1: "kSina",
 	2: "kTencent",
@@ -40,7 +40,7 @@ var AccountType_name = map[int32]string{
 	8: "kWechat",
 	9: "kEnd",
 }
-var AccountType_value = map[string]int32{
+var Account_Type_value = map[string]int32{
 	"kSelf":    0,
 	"kSina":    1,
 	"kTencent": 2,
@@ -53,20 +53,20 @@ var AccountType_value = map[string]int32{
 	"kEnd":     9,
 }
 
-func (x AccountType) Enum() *AccountType {
-	p := new(AccountType)
+func (x Account_Type) Enum() *Account_Type {
+	p := new(Account_Type)
 	*p = x
 	return p
 }
-func (x AccountType) String() string {
-	return proto.EnumName(AccountType_name, int32(x))
+func (x Account_Type) String() string {
+	return proto.EnumName(Account_Type_name, int32(x))
 }
-func (x *AccountType) UnmarshalJSON(data []byte) error {
-	value, err := proto.UnmarshalJSONEnum(AccountType_value, data, "AccountType")
+func (x *Account_Type) UnmarshalJSON(data []byte) error {
+	value, err := proto.UnmarshalJSONEnum(Account_Type_value, data, "Account_Type")
 	if err != nil {
 		return err
 	}
-	*x = AccountType(value)
+	*x = Account_Type(value)
 	return nil
 }
 
@@ -266,20 +266,20 @@ func (x *Response_Status) UnmarshalJSON(data []byte) error {
 }
 
 type Account struct {
-	Type             *AccountType `protobuf:"varint,1,req,name=type,enum=login.AccountType,def=0" json:"type,omitempty"`
-	Name             *string      `protobuf:"bytes,2,req,name=name" json:"name,omitempty"`
-	Token            *string      `protobuf:"bytes,3,req,name=token" json:"token,omitempty"`
-	Email            *string      `protobuf:"bytes,4,opt,name=email" json:"email,omitempty"`
-	XXX_unrecognized []byte       `json:"-"`
+	Type             *Account_Type `protobuf:"varint,1,req,name=type,enum=login.Account_Type,def=0" json:"type,omitempty"`
+	Name             *string       `protobuf:"bytes,2,req,name=name" json:"name,omitempty"`
+	Token            *string       `protobuf:"bytes,3,req,name=token" json:"token,omitempty"`
+	Email            *string       `protobuf:"bytes,4,opt,name=email" json:"email,omitempty"`
+	XXX_unrecognized []byte        `json:"-"`
 }
 
 func (m *Account) Reset()         { *m = Account{} }
 func (m *Account) String() string { return proto.CompactTextString(m) }
 func (*Account) ProtoMessage()    {}
 
-const Default_Account_Type AccountType = AccountType_kSelf
+const Default_Account_Type Account_Type = Account_kSelf
 
-func (m *Account) GetType() AccountType {
+func (m *Account) GetType() Account_Type {
 	if m != nil && m.Type != nil {
 		return *m.Type
 	}
@@ -528,7 +528,7 @@ func (m *Response) GetUser() *User {
 }
 
 func init() {
-	proto.RegisterEnum("login.AccountType", AccountType_name, AccountType_value)
+	proto.RegisterEnum("login.Account_Type", Account_Type_name, Account_Type_value)
 	proto.RegisterEnum("login.Birthday_Month", Birthday_Month_name, Birthday_Month_value)
 	proto.RegisterEnum("login.Profile_Gender", Profile_Gender_name, Profile_Gender_value)
 	proto.RegisterEnum("login.Request_Command", Request_Command_name, Request_Command_value)

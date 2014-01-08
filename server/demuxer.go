@@ -24,12 +24,20 @@ type Demuxer struct {
 	handler MessageHandler
 }
 
+//
+func (this *Demuxer) ValidSize(expected uint32) bool {
+	if expected > 1024*1024*10 {
+		return false
+	}
+	return true
+}
+
 // read message
 func (this *Demuxer) read(buffer []byte) {
 	//
 	defer close(this.forward)
 	//
-	header := message.NewDefaultHeader()
+	header := message.NewTinyHeader()
 	//
 	var messageSize uint32
 	var err error
@@ -55,6 +63,11 @@ loop:
 		}
 		// get size
 		messageSize = header.GetSize()
+		// check size
+		if this.ValidSize(messageSize) == false {
+			log.Println("Message size too big:", messageSize)
+			break loop
+		}
 		// get buffer
 		needed := len(buffer) - int(messageSize)
 		if needed < 0 {
@@ -77,7 +90,7 @@ loop:
 
 // wirite message
 func (this *Demuxer) write() {
-	header := message.NewDefaultHeader()
+	header := message.NewTinyHeader()
 	var err error
 	var writen int
 	var size int
