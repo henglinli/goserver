@@ -5,7 +5,7 @@ import (
 	"log"
 	"errors"
 	"../message"
-	//	"../server"
+	"code.google.com/p/leveldb-go/leveldb"
 	"code.google.com/p/goprotobuf/proto"
 )
 
@@ -22,8 +22,9 @@ type MessageHandler interface {
 // impl server.MessageHandler
 type Login struct {
 	logger *log.Logger
-	request  Request
-	response Response
+	request  message.Request
+	response message.Response
+	db *leveldb.DB
 }
 
 // decode message
@@ -71,19 +72,21 @@ func (this *Login) Handle(input []byte) []byte {
 	// message type check
 	err = this.check(message.KLoginRequest)
 	if err != nil {		
-		*this.response.Status = Response_kError
+		*this.response.Status = message.Response_kError
 		this.response.Error = proto.String(err.Error())
 	} else {
 	// command
 		command := this.request.GetCommand()
 		switch command {
-		case Request_kPing:
+		case message.Request_kPing:
 			this.pong()
-		case Request_kRegister:
+		case message.Request_kVeryfy:
+			this.veryfy()
+		case message.Request_kRegister:
 			this.register()
-		case Request_kLogin:
+		case message.Request_kLogin:
 			this.login()
-		case Request_kEnd:
+		case message.Request_kEnd:
 			fallthrough
 		default:
 			this.badCommand()
@@ -95,18 +98,21 @@ func (this *Login) Handle(input []byte) []byte {
 
 // bad command
 func (this *Login) badCommand() {
-	*this.response.Status = Response_kError
+	*this.response.Status = message.Response_kError
 	this.response.Error = proto.String("Illegal or Bad command")
 }
 
 // pong
 func (this *Login) pong() {
-	this.response.Pong = proto.String("Pong")
+	// do nothing
 }
+// veryfy
+func (this *Login) veryfy() {
 
+}
 // register
 func (this *Login) register() {
-	this.response.User = this.request.GetRegister()
+	
 }
 
 // login
@@ -117,17 +123,36 @@ func (this *Login) login() {
 // login manager
 type LoginManager struct {
 	logins chan Login
+	db *leveldb.DB 
 }
 
 //
 func NewLoginManager() *LoginManager {
 	manager := &LoginManager{
 		logins: make(chan Login, kMaxOnlineClients),
+		db: nil,
 	}
 	//
 	return manager
 }
 
+// open db
+func (manager *LoginManager) OpenDB(name string) error {
+	var err error
+	manager.db, err = leveldb.Open(name, nil)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	return nil
+}
+// close db
+func (manager *LoginManager) CloseDB() error {
+	if manager.db != nil {
+		return manager.db.Close()
+	}
+	return nil
+}
 //
 func (manager *LoginManager) Handle(input []byte) (output []byte) {
 	select {
@@ -148,8 +173,9 @@ func (manager *LoginManager) Handle(input []byte) (output []byte) {
 			logger: log.New(os.Stdout, 
 				"", 
 				log.Ldate|log.Lmicroseconds|log.Lshortfile),
-			request:  Request{},
-			response: Response{},
+			request:  message.Request{},
+			response: message.Response{},
+			db : manager.db,
 		}
 		// set default response
 		proto.SetDefaults(&l.response)
