@@ -6,17 +6,57 @@ import (
 	"net"
 )
 
+// ===========================================
+// server options
+const (
+	kMaxOnlineClients = 2048
+	kBufferSize       = 2048
+)
+
+// ===========================================
+// interface
+// session
+type Session interface {
+	// check session
+	IsLogin() bool
+	// session name
+	Name() string
+}
+
 //
+type SessionManager interface {
+	// new
+	NewSession(string) Session
+	// login
+	Login(Session)
+	// size
+	Sessions() int
+	// is login
+	IsLogin(Session) bool
+	// logout
+	Logout(Session)
+}
+
+// message handler
+type MessageHandler interface {
+	// handle the mesage
+	//Handle([]byte) []byte
+	Handle([]byte, Session) []byte
+}
+
+// connection handler
 type ConnectionHandler interface {
+	// handle the connection
 	Handle(net.Conn)
 }
 
+// ===========================================
 //
 type Server struct {
 	stop        chan int
 	address     string
 	connections chan net.Conn
-	clients     int64
+	manager     SessionManager
 }
 
 //
@@ -25,50 +65,44 @@ func NewServer(addr string) *Server {
 		stop:        make(chan int, 1),
 		address:     addr,
 		connections: make(chan net.Conn),
-		clients:     0,
 	}
 	//
 	return server
 }
 
-// connected clients
-func (server *Server) Clients() int64 {
-	return server.clients
-}
-
 //
-func (server *Server) listen(handler ConnectionHandler) {
+func (this *Server) listen(handler ConnectionHandler) {
 	go func() {
-		for conn := range server.connections {
+		for conn := range this.connections {
 			handler.Handle(conn)
 		}
 	}()
 }
 
 //
-func (server *Server) Stop() {
-	defer close(server.stop)
+func (this *Server) Stop() {
+	defer close(this.stop)
 	//
 	log.Println("stopping server...")
-	server.stop <- 1
+	this.stop <- 1
 }
 
 //
-func (server *Server) Serve(handler ConnectionHandler) error {
+func (this *Server) Serve(handler ConnectionHandler) error {
 	var err error
 	err = nil
-	//
-	server.listen(handler)
+	// handle connections
+	this.listen(handler)
 	//
 	go func() {
 		// close connections
 		defer func() {
-			for conn := range server.connections {
+			for conn := range this.connections {
 				conn.Close()
 			}
 		}()
 		// listen
-		ln, e := net.Listen("tcp", server.address)
+		ln, e := net.Listen("tcp", this.address)
 		if err != nil {
 			// handle error
 			log.Println("net.Listen error: ", err.Error())
@@ -79,9 +113,9 @@ func (server *Server) Serve(handler ConnectionHandler) error {
 		defer ln.Close()
 		// accept
 		for {
-			// check should stop
 			select {
-			case <-server.stop:
+			// check should stop
+			case <-this.stop:
 				return
 			default:
 				// continue
@@ -94,7 +128,7 @@ func (server *Server) Serve(handler ConnectionHandler) error {
 				continue
 			}
 			//
-			server.connections <- conn
+			this.connections <- conn
 		}
 	}()
 	//

@@ -1,10 +1,11 @@
 package login
 
 import (
+	"../message"
+	"../server"
 	"os"
 	"log"
 	"errors"
-	"../message"
 	"code.google.com/p/leveldb-go/leveldb"
 	"code.google.com/p/goprotobuf/proto"
 )
@@ -28,8 +29,8 @@ type Login struct {
 }
 
 // decode message
-func (this *Login) decode(input []byte) error {
-	err := proto.Unmarshal(input, &this.request)
+func (this *Login) decode(in []byte) error {
+	err := proto.Unmarshal(in, &this.request)
 	if err != nil {
 		this.logger.Println(err.Error())
 		return errors.New("Illegal protocol")
@@ -61,11 +62,12 @@ func (this *Login) encode() []byte {
 }
 
 // handle
-func (this *Login) Handle(input []byte) []byte {
+func (this *Login) Handle(in []byte, s server.Session) []byte {
+	log.Println("session:" , s.Name())
 	// var
 	var err error
 	// decode message
-	err = this.decode(input) 
+	err = this.decode(in) 
 	if err != nil {
 		return []byte(err.Error())	
 	}
@@ -112,7 +114,20 @@ func (this *Login) veryfy() {
 }
 // register
 func (this *Login) register() {
-	
+	// has extension
+	if proto.HasExtension(&this.request, message.E_Register_User) {
+		data, err := proto.GetExtension(&this.request, 
+			message.E_Register_User)
+		if err != nil {
+			user := data.(*message.User)
+			account := user.GetAccount()
+			profile := user.GetProfile()
+			log.Println(account, profile)
+		}
+	}
+	// not have extension
+	*this.response.Status = message.Response_kError
+	this.response.Error = proto.String("Request need extentsion 9")
 }
 
 // login
@@ -154,12 +169,12 @@ func (manager *LoginManager) CloseDB() error {
 	return nil
 }
 //
-func (manager *LoginManager) Handle(input []byte) (output []byte) {
+func (manager *LoginManager) Handle(in []byte, s server.Session) (out []byte) {
 	select {
 	// get login
 	case l := <-manager.logins:
 		// handle
-		output = l.Handle(input)
+		out = l.Handle(in, s)
 		// recycle login
 		select {
 		case manager.logins <- l:
@@ -180,7 +195,7 @@ func (manager *LoginManager) Handle(input []byte) (output []byte) {
 		// set default response
 		proto.SetDefaults(&l.response)
 		// handle
-		output = l.Handle(input)
+		out = l.Handle(in, s)
 		// recycle login
 		select {
 		case manager.logins <- l:
@@ -190,5 +205,5 @@ func (manager *LoginManager) Handle(input []byte) (output []byte) {
 		}
 	}
 	//
-	return output
+	return out
 }

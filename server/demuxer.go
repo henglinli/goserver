@@ -8,9 +8,9 @@ import (
 	"net"
 )
 
-//
-type MessageHandler interface {
-	Handle([]byte) []byte
+// impplement ConnectionHandler interface
+type _ConnectionHandler interface {
+	Handle(net.Conn)
 }
 
 // 1, recv header
@@ -22,6 +22,7 @@ type Demuxer struct {
 	writer  *bufio.Writer
 	buffer  chan []byte
 	handler MessageHandler
+	session Session
 }
 
 //
@@ -82,7 +83,7 @@ loop:
 		}
 		// handle message
 		input := buffer[0:messageSize]
-		output := this.handler.Handle(input)
+		output := this.handler.Handle(input, this.session)
 		this.forward <- output
 	}
 	log.Println("Demuxer.Read done")
@@ -134,8 +135,8 @@ func (this *Demuxer) Demux(buffer []byte) {
 	this.read(buffer)
 }
 
-//
-func NewDemuxer(conn net.Conn, h MessageHandler) *Demuxer {
+// call MessasgeHandler.Handle
+func NewDemuxer(conn net.Conn, h MessageHandler, s Session) *Demuxer {
 	writer := bufio.NewWriter(conn)
 	reader := bufio.NewReader(conn)
 
@@ -145,31 +146,36 @@ func NewDemuxer(conn net.Conn, h MessageHandler) *Demuxer {
 		writer:  writer,
 		buffer:  make(chan []byte),
 		handler: h,
+		session: s,
 	}
 	//this.listen()
 
 	return demuxer
 }
 
-const (
-	kMaxOnlineClients = 2048
-	kBufferSize       = 2048
-)
-
 // impl server.ConnectionHandler
 type DemuxerHandler struct {
-	buffers        chan []byte
-	messageHandler MessageHandler
+	buffers chan []byte
+	handler MessageHandler
+	manager SessionManager
 }
 
+//
 func (this *DemuxerHandler) Handle(conn net.Conn) {
 	log.Println("DemuxerHandler.Handle", conn.RemoteAddr())
 	//
 	go func() {
-		//
+		// close connection after done
 		defer conn.Close()
+		// new session
+		remoteAddr := conn.RemoteAddr()
+		session := this.manager.NewSession(remoteAddr.String())
+		// login session
+		this.manager.Login(session)
+		// logout session after done
+		defer this.manager.Logout(session)
 		// new demuxer
-		demuxer := NewDemuxer(conn, this.messageHandler)
+		demuxer := NewDemuxer(conn, this.handler, session)
 		// select buffer
 		var buffer []byte
 		select {
@@ -190,10 +196,11 @@ func (this *DemuxerHandler) Handle(conn net.Conn) {
 	log.Println("DemuxerHandler.Handle started")
 }
 
-func NewDemuxerHandler(h MessageHandler) *DemuxerHandler {
+func NewDemuxerHandler(h MessageHandler, m SessionManager) *DemuxerHandler {
 	handler := &DemuxerHandler{
-		buffers:        make(chan []byte, kMaxOnlineClients*2),
-		messageHandler: h,
+		buffers: make(chan []byte, kMaxOnlineClients*2),
+		handler: h,
+		manager: m,
 	}
 
 	return handler

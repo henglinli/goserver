@@ -29,16 +29,18 @@ func main() {
 	//
 	log.Println("starting Server...")
 	//
-	manager := login.NewLoginManager()
+	loginManager := login.NewLoginManager()
 	// 
 	db := "user.db"
-	err := manager.OpenDB(db)
+	err := loginManager.OpenDB(db)
 	if err != nil {
 		return
 	}
-	defer manager.CloseDB()
+	defer loginManager.CloseDB()
 	//
-	handler := server.NewDemuxerHandler(manager)
+	sessionManager := server.NewAddrSessionManager()
+	//
+	handler := server.NewDemuxerHandler(loginManager, sessionManager)
 	s := server.NewServer(address)
 	s.Serve(handler)
 	utils.Wait()

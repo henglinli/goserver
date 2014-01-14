@@ -1,6 +1,7 @@
 package main
 
 import (
+	"../message"
 	"bufio"
 	"encoding/binary"
 	"flag"
@@ -8,8 +9,8 @@ import (
 	"io"
 	"log"
 	"net"
-	"../message"
 )
+
 //
 func GetSize(b []byte) uint32 {
 	return binary.BigEndian.Uint32(b[0:4])
@@ -22,8 +23,8 @@ func SetSize(s uint32, b []byte) {
 
 //
 type Client struct {
-	rheader *message.DefaultHeader
-	wheader *message.DefaultHeader
+	rheader  *message.DefaultHeader
+	wheader  *message.DefaultHeader
 	incoming chan string
 	outgoing chan string
 }
@@ -43,7 +44,7 @@ func (this *Client) Connect(address string) error {
 func (this *Client) read(conn net.Conn) {
 	defer close(this.incoming)
 	defer conn.Close()
-	//	
+	//
 	var messageSize uint32
 	var err error
 	var readed int
@@ -57,7 +58,7 @@ loop:
 		//
 		log.Println("receiving...")
 		// read boundary
-		readed, err = io.ReadAtLeast(reader, 
+		readed, err = io.ReadAtLeast(reader,
 			this.rheader[:],
 			len(this.rheader))
 		if err != nil || readed < 4 {
@@ -145,8 +146,8 @@ func (this *Client) handle(conn net.Conn) {
 //
 func NewClient() *Client {
 	client := &Client{
-		rheader: message.NewDefaultHeader(),
-		wheader: message.NewDefaultHeader(),
+		rheader:  message.NewDefaultHeader(),
+		wheader:  message.NewDefaultHeader(),
 		incoming: make(chan string),
 		outgoing: make(chan string),
 	}
