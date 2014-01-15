@@ -1,167 +1,182 @@
-package main
+package client
 
 import (
 	"../message"
-	"bufio"
-	"encoding/binary"
-	"flag"
-	"fmt"
-	"io"
+	"../server"
+	"code.google.com/p/goprotobuf/proto"
+	"code.google.com/p/leveldb-go/leveldb"
+	"errors"
 	"log"
-	"net"
+	"os"
 )
 
-//
-func GetSize(b []byte) uint32 {
-	return binary.BigEndian.Uint32(b[0:4])
+// impl server.MessageHandler
+type ProtobufClient struct {
+	logger   *log.Logger
+	request  message.Request
+	response message.Response
+	db       *leveldb.DB
 }
 
-//
-func SetSize(s uint32, b []byte) {
-	binary.BigEndian.PutUint32(b[0:4], s)
-}
-
-//
-type Client struct {
-	rheader  *message.DefaultHeader
-	wheader  *message.DefaultHeader
-	incoming chan string
-	outgoing chan string
-}
-
-func (this *Client) Connect(address string) error {
-	log.Println("connecting to ", address)
-	conn, err := net.Dial("tcp", address)
+// decode message
+func (this *ProtobufClient) decode(in []byte) error {
+	err := proto.Unmarshal(in, &this.request)
 	if err != nil {
-		return err
-		log.Println(err.Error())
+		this.logger.Println(err.Error())
+		return errors.New("Illegal protocol")
 	}
-	log.Println("connected ", conn.RemoteAddr())
-	this.handle(conn)
 	return nil
 }
 
-func (this *Client) read(conn net.Conn) {
-	defer close(this.incoming)
-	defer conn.Close()
-	//
-	var messageSize uint32
-	var err error
-	var readed int
-	var buffer []byte
-	reader := bufio.NewReader(conn)
-	//
-loop:
-	for {
-		// wait cann recv
-		<-this.incoming
-		//
-		log.Println("receiving...")
-		// read boundary
-		readed, err = io.ReadAtLeast(reader,
-			this.rheader[:],
-			len(this.rheader))
-		if err != nil || readed < 4 {
-			log.Println("read bondary:", err.Error())
-			break loop
+// check message type
+func (this *ProtobufClient) check(desired uint32) error {
+	expected := this.request.GetType()
+	if expected != desired {
+		if expected > message.KNil && expected < message.KEnd {
+			return errors.New("Bad message type")
+		} else {
+			return errors.New("Illegal message type")
 		}
-		// get size and type
-		messageSize = this.rheader.GetSize()
-		log.Println("message size:", messageSize)
-		// get buffer
-		needed := len(buffer) - int(messageSize)
-		if needed < 0 {
-			log.Println("Growing buffer...")
-			buffer = make([]byte, messageSize)
-		}
-		// get message
-		readed, err = io.ReadAtLeast(reader, buffer, int(messageSize))
-		if err != nil || readed < int(messageSize) {
-			log.Println("read message:", err.Error())
-			break loop
-		}
-		//
-		// message.DebugPrint("message", buffer[0:readed])
-		log.Println(string(buffer[0:readed]))
 	}
-	this.outgoing <- "closed"
+	return nil
 }
 
-func (this *Client) write(conn net.Conn) {
-	defer close(this.outgoing)
-	//
-	var line string
-	writer := bufio.NewWriter(conn)
-loop:
-	for {
-		//
-		n, err := fmt.Scanln(&line)
-		if err != nil {
-			log.Println(err.Error())
-			continue
+// encode message
+func (this *ProtobufClient) encode() []byte {
+	message, err := proto.Marshal(&this.response)
+	if err != nil {
+		this.logger.Println(err.Error)
+		return []byte("Internal Error: proto.Marshal")
+	}
+	return message
+}
+
+// handle
+func (this *ProtobufClient) Handle(in []byte, s server.Session) []byte {
+	log.Println("session:", s.Name())
+	// var
+	var err error
+	// decode message
+	err = this.decode(in)
+	if err != nil {
+		return []byte(err.Error())
+	}
+	// message type check
+	err = this.check(message.KLoginRequest)
+	if err != nil {
+		*this.response.Status = message.Response_kError
+		this.response.Error = proto.String(err.Error())
+	} else {
+		// command
+		command := this.request.GetCommand()
+		switch command {
+		case message.Request_kPing:
+			this.pong()
+		case message.Request_kVeryfy:
+			this.veryfy()
+		case message.Request_kRegister:
+			this.register()
+		case message.Request_kLogin:
+			this.login()
+		case message.Request_kEnd:
+			fallthrough
+		default:
+			this.badCommand()
 		}
-		//
+	}
+	// encode message
+	return this.encode()
+}
+
+// bad command
+func (this *ProtobufClient) badCommand() {
+	*this.response.Status = message.Response_kError
+	this.response.Error = proto.String("Illegal or Bad command")
+}
+
+// pong
+func (this *ProtobufClient) pong() {
+	// do nothing
+}
+
+// veryfy
+func (this *ProtobufClient) veryfy() {
+
+}
+
+// register
+func (this *ProtobufClient) register() {
+	// has extension
+	if proto.HasExtension(&this.request, message.E_Register_User) {
+		data, err := proto.GetExtension(&this.request,
+			message.E_Register_User)
+		if err != nil {
+			user := data.(*message.User)
+			account := user.GetAccount()
+			profile := user.GetProfile()
+			log.Println(account, profile)
+		}
+	}
+	// not have extension
+	*this.response.Status = message.Response_kError
+	this.response.Error = proto.String("Request need extentsion 9")
+}
+
+// login
+func (this *ProtobufClient) login() {
+	//
+}
+
+// login manager
+type ProtobufClientManager struct {
+	logins chan ProtobufClient
+}
+
+//
+func NewProtobufClientManager() *ProtobufClientManager {
+	manager := &ProtobufClientManager{
+		logins: make(chan ProtobufClient, server.KMaxOnlineClients),
+	}
+	//
+	return manager
+}
+
+//
+func (manager *ProtobufClientManager) Handle(in []byte, s server.Session) (out []byte) {
+	select {
+	// get login
+	case l := <-manager.logins:
+		// handle
+		out = l.Handle(in, s)
+		// recycle login
 		select {
-		case <-this.outgoing:
-			break loop
+		case manager.logins <- l:
+			// nil
 		default:
 			// nil
 		}
-		size := len(line)
-		log.Println("sending header...")
-		//
-		this.wheader.SetSize(uint32(size))
-		log.Println(this.wheader)
-		//
-		n, err = writer.Write(this.wheader[:])
-		if err != nil || n != len(this.wheader) {
-			log.Println(err.Error())
-			break loop
+	default:
+		// make login
+		l := ProtobufClient{
+			logger: log.New(os.Stdout,
+				"",
+				log.Ldate|log.Lmicroseconds|log.Lshortfile),
+			request:  message.Request{},
+			response: message.Response{},
+			db: s.GetDB(),
 		}
-		log.Println(n, "bytes sent")
-		//
-		log.Println("sending message...")
-		n, err = writer.WriteString(line)
-		if err != nil || n != size {
-			log.Println(err.Error())
-			break loop
+		// set default response
+		proto.SetDefaults(&l.response)
+		// handle
+		out = l.Handle(in, s)
+		// recycle login
+		select {
+		case manager.logins <- l:
+			// nil
+		default:
+			// nil
 		}
-		log.Println(n, "bytes sent")
-		err = writer.Flush()
-		if err != nil {
-			log.Println(err.Error())
-			break loop
-		}
-		//
-		this.incoming <- "yes"
 	}
-}
-
-//
-func (this *Client) handle(conn net.Conn) {
-	go this.read(conn)
-	this.write(conn)
-}
-
-//
-func NewClient() *Client {
-	client := &Client{
-		rheader:  message.NewDefaultHeader(),
-		wheader:  message.NewDefaultHeader(),
-		incoming: make(chan string),
-		outgoing: make(chan string),
-	}
-
-	return client
-}
-
-func main() {
-	// flag
-	ip := flag.String("ip", "127.0.0.1", "server ip")
-	port := flag.String("port", "9999", "server port")
-	flag.Parse()
-	address := *ip + ":" + *port
 	//
-	client := NewClient()
-	client.Connect(address)
+	return out
 }

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"../message"
 	"bufio"
 	"io"
 	"log"
@@ -20,7 +19,7 @@ type Demuxer struct {
 	forward chan []byte
 	reader  *bufio.Reader
 	writer  *bufio.Writer
-	buffer  chan []byte
+	//buffer  chan []byte
 	handler MessageHandler
 	session Session
 }
@@ -38,7 +37,7 @@ func (this *Demuxer) read(buffer []byte) {
 	//
 	defer close(this.forward)
 	//
-	header := message.NewTinyHeader()
+	header := NewTinyHeader()
 	//
 	var messageSize uint32
 	var err error
@@ -91,7 +90,7 @@ loop:
 
 // wirite message
 func (this *Demuxer) write() {
-	header := message.NewTinyHeader()
+	header := NewTinyHeader()
 	var err error
 	var writen int
 	var size int
@@ -144,7 +143,7 @@ func NewDemuxer(conn net.Conn, h MessageHandler, s Session) *Demuxer {
 		forward: make(chan []byte),
 		reader:  reader,
 		writer:  writer,
-		buffer:  make(chan []byte),
+		//buffer:  make(chan []byte),
 		handler: h,
 		session: s,
 	}
@@ -165,17 +164,16 @@ func (this *DemuxerHandler) Handle(conn net.Conn) {
 	log.Println("DemuxerHandler.Handle", conn.RemoteAddr())
 	//
 	go func() {
-		// close connection after done
-		defer conn.Close()
 		// new session
-		remoteAddr := conn.RemoteAddr()
-		session := this.manager.NewSession(remoteAddr.String())
+		//remoteAddr := conn.RemoteAddr()
+		//session := nil
+		//this.manager.NewSession(conn)
 		// login session
-		this.manager.Login(session)
+		//this.manager.Login(session)
 		// logout session after done
-		defer this.manager.Logout(session)
+		//defer this.manager.Logout(session)
 		// new demuxer
-		demuxer := NewDemuxer(conn, this.handler, session)
+		demuxer := NewDemuxer(conn, this.handler, nil)
 		// select buffer
 		var buffer []byte
 		select {
@@ -183,7 +181,7 @@ func (this *DemuxerHandler) Handle(conn net.Conn) {
 			log.Println("reuse buffer", len(buffer))
 			// nil
 		default:
-			buffer = make([]byte, kBufferSize)
+			buffer = make([]byte, KBufferSize)
 			log.Println("make buffer")
 		}
 		//
@@ -198,7 +196,7 @@ func (this *DemuxerHandler) Handle(conn net.Conn) {
 
 func NewDemuxerHandler(h MessageHandler, m SessionManager) *DemuxerHandler {
 	handler := &DemuxerHandler{
-		buffers: make(chan []byte, kMaxOnlineClients*2),
+		buffers: make(chan []byte, KMaxOnlineClients*2),
 		handler: h,
 		manager: m,
 	}

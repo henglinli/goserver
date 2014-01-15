@@ -1,15 +1,8 @@
-package message
+package server
 
 import (
 	"encoding/binary"
 )
-
-type Header interface {
-	GetSize() uint32
-	GetMagic() string
-	SetSize(uint32)
-	//SetMagic(string)
-}
 
 // message header
 type DynamicHeader struct {
@@ -39,12 +32,6 @@ func NewDynamicHeader(m string, s uint32) *DynamicHeader {
 	//
 	return header
 }
-
-// defualt messsage header magic
-const (
-	kDefaultMagic    string = "magic"
-	kDefaultMagicLen        = len(kDefaultMagic)
-)
 
 type DefaultHeader [len(kDefaultMagic) + 4]byte
 

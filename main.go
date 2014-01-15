@@ -2,9 +2,8 @@ package main
 
 //
 import (
+	"./client"
 	"./server"
-	"./utils"
-	"./login"
 	"flag"
 	"log"
 )
@@ -27,24 +26,30 @@ func main() {
 	flag.Parse()
 	address := *ip + ":" + *port
 	//
-	log.Println("starting Server...")
+	log.Println("starting GoServer ...")
 	//
-	loginManager := login.NewLoginManager()
-	// 
-	db := "user.db"
-	err := loginManager.OpenDB(db)
-	if err != nil {
-		return
-	}
-	defer loginManager.CloseDB()
+	//handler := server.NewEchoMessageHandler()
+	handler := client.NewProtobufClientManager()
+	server.Go(address, handler)
 	//
-	sessionManager := server.NewAddrSessionManager()
-	//
-	handler := server.NewDemuxerHandler(loginManager, sessionManager)
-	s := server.NewServer(address)
-	s.Serve(handler)
-	utils.Wait()
-	s.Stop()
+	/*
+
+		//
+		db := "user.db"
+		err := clientManager.OpenDB(db)
+		if err != nil {
+			return
+		}
+		defer clientManager.CloseDB()
+		//
+		sessionManager := server.NewAddrSessionManager()
+		//
+		handler := server.NewDemuxerHandler(clientManager, sessionManager)
+		s := server.NewGoServer(address)
+		s.Serve(handler)
+		utils.Wait()
+		s.Stop()
+	*/
 	//
 	log.Println("Good Bye!")
 }
