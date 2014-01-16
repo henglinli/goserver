@@ -19,6 +19,8 @@ type AddrSession struct {
 	handler MessageHandler
 	rheader *TinyHeader
 	wheader *TinyHeader
+	user    interface{}
+	captcha interface{}
 }
 
 //
@@ -41,6 +43,8 @@ func NewAddrSession(conn net.Conn,
 		rheader: NewTinyHeader(),
 		wheader: NewTinyHeader(),
 		handler: h,
+		user:    nil,
+		captcha: nil,
 	}
 
 	return session
@@ -123,8 +127,7 @@ loop:
 		}
 		// handle message
 		input := buffer[0:messageSize]
-		output := this.handler.Handle(input, this)
-		this.forward <- output
+		this.forward <- this.handler.Handle(input, this)
 	}
 	log.Println("Session.Read done")
 }

@@ -4,7 +4,7 @@ import (
 	"../message"
 	"../server"
 	"code.google.com/p/goprotobuf/proto"
-	"code.google.com/p/leveldb-go/leveldb"
+	//"code.google.com/p/leveldb-go/leveldb"
 	"errors"
 	"log"
 	"os"
@@ -13,24 +13,13 @@ import (
 // impl server.MessageHandler
 type ProtobufClient struct {
 	logger   *log.Logger
-	request  message.Request
+	request  *message.Request
 	response message.Response
-	db       *leveldb.DB
-}
-
-// decode message
-func (this *ProtobufClient) decode(in []byte) error {
-	err := proto.Unmarshal(in, &this.request)
-	if err != nil {
-		this.logger.Println(err.Error())
-		return errors.New("Illegal protocol")
-	}
-	return nil
+	session  server.Session
 }
 
 // check message type
-func (this *ProtobufClient) check(desired uint32) error {
-	expected := this.request.GetType()
+func (this *ProtobufClient) CheckType(desired, expected uint32) error {
 	if expected != desired {
 		if expected > message.KNil && expected < message.KEnd {
 			return errors.New("Bad message type")
@@ -41,62 +30,60 @@ func (this *ProtobufClient) check(desired uint32) error {
 	return nil
 }
 
-// encode message
-func (this *ProtobufClient) encode() []byte {
-	message, err := proto.Marshal(&this.response)
-	if err != nil {
-		this.logger.Println(err.Error)
-		return []byte("Internal Error: proto.Marshal")
-	}
-	return message
-}
-
 // handle
-func (this *ProtobufClient) Handle(in []byte, s server.Session) []byte {
-	log.Println("session:", s.Name())
-	// var
-	var err error
-	// decode message
-	err = this.decode(in)
-	if err != nil {
-		return []byte(err.Error())
-	}
-	// message type check
-	err = this.check(message.KLoginRequest)
-	if err != nil {
+func (this *ProtobufClient) Handle(in interface{}, s server.Session) interface{} {
+	this.logger.Println("session:", s.Name())
+	// get request
+	var ok bool
+	this.request, ok = in.(*message.Request)
+	if ok != true {
 		*this.response.Status = message.Response_kError
-		this.response.Error = proto.String(err.Error())
-	} else {
-		// command
-		command := this.request.GetCommand()
-		switch command {
-		case message.Request_kPing:
-			this.pong()
-		case message.Request_kVeryfy:
-			this.veryfy()
-		case message.Request_kRegister:
-			this.register()
-		case message.Request_kLogin:
-			this.login()
-		case message.Request_kEnd:
-			fallthrough
-		default:
-			this.badCommand()
+		this.response.Error = proto.String("Bad message.Request type")
+		return &this.response
+	}
+	// check type
+	if false {
+		err := this.CheckType(message.KLoginRequest,
+			this.request.GetType())
+		//
+		if err != nil {
+			*this.response.Status = message.Response_kError
+			this.response.Error = proto.String(err.Error())
+			return &this.response
 		}
 	}
-	// encode message
-	return this.encode()
+	// check command
+	command := this.request.GetCommand()
+
+	this.logger.Println(command)
+	*this.response.Status = message.Response_kError
+	switch command {
+	case message.Request_kPing:
+		this.pong()
+	case message.Request_kVeryfy:
+		this.veryfy()
+	case message.Request_kRegister:
+		this.register()
+	case message.Request_kLogin:
+		this.login()
+	case message.Request_kEnd:
+		fallthrough
+	default:
+		this.badCommand()
+	}
+	//
+	return &this.response
 }
 
 // bad command
 func (this *ProtobufClient) badCommand() {
-	*this.response.Status = message.Response_kError
 	this.response.Error = proto.String("Illegal or Bad command")
 }
 
 // pong
 func (this *ProtobufClient) pong() {
 	// do nothing
+	*this.response.Status = message.Response_kOk
 }
 
 // veryfy
@@ -106,19 +93,52 @@ func (this *ProtobufClient) veryfy() {
 
 // register
 func (this *ProtobufClient) register() {
+
 	// has extension
-	if proto.HasExtension(&this.request, message.E_Register_User) {
-		data, err := proto.GetExtension(&this.request,
+	if proto.HasExtension(this.request, message.E_Register_User) {
+		data, err := proto.GetExtension(this.request,
 			message.E_Register_User)
 		if err != nil {
-			user := data.(*message.User)
-			account := user.GetAccount()
-			profile := user.GetProfile()
-			log.Println(account, profile)
+			this.response.Error = proto.String(err.Error())
+			return
 		}
+		user, ok := data.(*message.User)
+		if ok != true {
+			*this.response.Status = message.Response_kError
+			this.response.Error =
+				proto.String("Bad Register.User type")
+			return
+		}
+		account := user.GetAccount()
+		name := account.GetName()
+		profile := user.GetProfile()
+		log.Println("Register", name, account, profile)
+		if false {
+			user_byte, err := proto.Marshal(user)
+			if err != nil {
+				this.response.Error = proto.String(err.Error())
+				return
+			}
+			//err = this.session.db.Set([]byte(name), user_byte)
+			if err != nil {
+				this.response.Error = proto.String(err.Error())
+				return
+			}
+			log.Println(user_byte)
+		}
+
+		//this.session.user = user;
+		//
+		captcha := &message.Captcha{}
+		captcha.Code = proto.String("captcha")
+		captcha.Image = []byte("captcha")
+		*this.response.Status = message.Response_kOk
+		err = proto.SetExtension(&this.response,
+			message.E_Register_Captcha,
+			captcha)
+		return
 	}
 	// not have extension
-	*this.response.Status = message.Response_kError
 	this.response.Error = proto.String("Request need extentsion 9")
 }
 
@@ -129,54 +149,74 @@ func (this *ProtobufClient) login() {
 
 // login manager
 type ProtobufClientManager struct {
-	logins chan ProtobufClient
+	logger  *log.Logger
+	clients chan *ProtobufClient
+	coder   message.Coder
 }
 
 //
 func NewProtobufClientManager() *ProtobufClientManager {
 	manager := &ProtobufClientManager{
-		logins: make(chan ProtobufClient, server.KMaxOnlineClients),
+		logger:  nil,
+		clients: make(chan *ProtobufClient, server.KMaxOnlineClients),
+		coder:   message.NewProtobufCoder(),
 	}
+	manager.logger = log.New(os.Stdout,
+		"",
+		log.Ldate|log.Lmicroseconds|log.Lshortfile)
 	//
 	return manager
 }
 
 //
-func (manager *ProtobufClientManager) Handle(in []byte, s server.Session) (out []byte) {
+func (this *ProtobufClientManager) GetClient() *ProtobufClient {
 	select {
-	// get login
-	case l := <-manager.logins:
-		// handle
-		out = l.Handle(in, s)
-		// recycle login
-		select {
-		case manager.logins <- l:
-			// nil
-		default:
-			// nil
-		}
+	case c := <-this.clients:
+		return c
 	default:
-		// make login
-		l := ProtobufClient{
-			logger: log.New(os.Stdout,
-				"",
-				log.Ldate|log.Lmicroseconds|log.Lshortfile),
-			request:  message.Request{},
+		c := &ProtobufClient{
+			logger:   this.logger,
+			request:  nil,
 			response: message.Response{},
-			db: s.GetDB(),
+			session:  nil,
 		}
 		// set default response
-		proto.SetDefaults(&l.response)
-		// handle
-		out = l.Handle(in, s)
-		// recycle login
-		select {
-		case manager.logins <- l:
-			// nil
-		default:
-			// nil
-		}
+		proto.SetDefaults(&c.response)
+		return c
 	}
-	//
-	return out
+}
+
+//
+func (this *ProtobufClientManager) PutClient(in *ProtobufClient) {
+	select {
+	case this.clients <- in:
+		// nil
+	default:
+		// nil
+	}
+}
+
+//
+func (this *ProtobufClientManager) Handle(in []byte, s server.Session) []byte {
+	this.logger.Println("decode request ...")
+	// decode
+	request, err := this.coder.Decode(in)
+	if err != nil {
+		return []byte(err.Error())
+	}
+	// get
+	c := this.GetClient()
+	// handle
+	this.logger.Println("hanle request ...")
+	out := c.Handle(request, s)
+	// recycle login
+	this.PutClient(c)
+	// encode
+	this.logger.Println("encode reponse ...")
+	response, err := this.coder.Encode(out)
+	if err != nil {
+		return []byte(err.Error())
+	} else {
+		return response
+	}
 }

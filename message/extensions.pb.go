@@ -335,16 +335,16 @@ func (m *Profile) GetAccounts() []*Account {
 }
 
 type User struct {
-	Account          []*Account `protobuf:"bytes,1,rep,name=account" json:"account,omitempty"`
-	Profile          *Profile   `protobuf:"bytes,2,opt,name=profile" json:"profile,omitempty"`
-	XXX_unrecognized []byte     `json:"-"`
+	Account          *Account `protobuf:"bytes,1,req,name=account" json:"account,omitempty"`
+	Profile          *Profile `protobuf:"bytes,2,opt,name=profile" json:"profile,omitempty"`
+	XXX_unrecognized []byte   `json:"-"`
 }
 
 func (m *User) Reset()         { *m = User{} }
 func (m *User) String() string { return proto.CompactTextString(m) }
 func (*User) ProtoMessage()    {}
 
-func (m *User) GetAccount() []*Account {
+func (m *User) GetAccount() *Account {
 	if m != nil {
 		return m.Account
 	}
@@ -359,13 +359,21 @@ func (m *User) GetProfile() *Profile {
 }
 
 type Captcha struct {
-	Image            []byte `protobuf:"bytes,1,opt,name=image" json:"image,omitempty"`
-	XXX_unrecognized []byte `json:"-"`
+	Code             *string `protobuf:"bytes,1,opt,name=code" json:"code,omitempty"`
+	Image            []byte  `protobuf:"bytes,2,opt,name=image" json:"image,omitempty"`
+	XXX_unrecognized []byte  `json:"-"`
 }
 
 func (m *Captcha) Reset()         { *m = Captcha{} }
 func (m *Captcha) String() string { return proto.CompactTextString(m) }
 func (*Captcha) ProtoMessage()    {}
+
+func (m *Captcha) GetCode() string {
+	if m != nil && m.Code != nil {
+		return *m.Code
+	}
+	return ""
+}
 
 func (m *Captcha) GetImage() []byte {
 	if m != nil {

@@ -12,7 +12,7 @@ func Wait() {
 	signal_chan := make(chan os.Signal, 1)
 	go func() {
 		<-signal_chan
-		log.Println("Caught signal, exiting...")
+		log.Println("Caught signal, exiting ...")
 		exit_chan <- 1
 	}()
 	signal.Notify(signal_chan, syscall.SIGINT, syscall.SIGTERM)

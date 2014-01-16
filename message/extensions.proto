@@ -87,14 +87,17 @@ message Profile {
 }
 // user, db save this
 message User {
-  // acounts
-  repeated Account account = 1;
+  // acount
+  required Account account = 1;
   // acounts
   optional Profile profile = 2;  
 }
-// capta
+// captcha
 message Captcha {
-  optional bytes image = 1;
+  // captcha code
+  optional string code = 1;
+  // captcha image
+  optional bytes image = 2;
 }
 /////////////////////////////////////////////////////
 // message extesions

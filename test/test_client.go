@@ -1,8 +1,10 @@
 package main
 
 import (
+	"../message"
 	"../server"
 	"bufio"
+	"code.google.com/p/goprotobuf/proto"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -27,6 +29,8 @@ type Client struct {
 	wheader  *server.TinyHeader
 	incoming chan string
 	outgoing chan string
+	reader   *bufio.Reader
+	writer   *bufio.Writer
 }
 
 func (this *Client) Connect(address string) error {
@@ -49,7 +53,7 @@ func (this *Client) read(conn net.Conn) {
 	var err error
 	var readed int
 	var buffer []byte
-	reader := bufio.NewReader(conn)
+	this.reader = bufio.NewReader(conn)
 	//
 loop:
 	for {
@@ -58,7 +62,7 @@ loop:
 		//
 		log.Println("receiving...")
 		// read boundary
-		readed, err = io.ReadAtLeast(reader,
+		readed, err = io.ReadAtLeast(this.reader,
 			this.rheader[:],
 			len(this.rheader))
 		if err != nil || readed < 4 {
@@ -75,14 +79,19 @@ loop:
 			buffer = make([]byte, messageSize)
 		}
 		// get message
-		readed, err = io.ReadAtLeast(reader, buffer, int(messageSize))
+		readed, err = io.ReadAtLeast(this.reader, buffer, int(messageSize))
 		if err != nil || readed < int(messageSize) {
 			log.Println("read message:", err.Error())
 			break loop
 		}
-		//
-		// message.DebugPrint("message", buffer[0:readed])
-		log.Println(string(buffer[0:readed]))
+		response := &message.Response{}
+		message := buffer[0:readed]
+		err := proto.Unmarshal(message, response)
+		if err != nil {
+			log.Println(err.Error())
+		} else {
+			log.Println(response.GetStatus())
+		}
 	}
 	this.outgoing <- "closed"
 }
@@ -91,11 +100,11 @@ func (this *Client) write(conn net.Conn) {
 	defer close(this.outgoing)
 	//
 	var line string
-	writer := bufio.NewWriter(conn)
+	this.writer = bufio.NewWriter(conn)
 loop:
 	for {
 		//
-		n, err := fmt.Scanln(&line)
+		_, err := fmt.Scanln(&line)
 		if err != nil {
 			log.Println(err.Error())
 			continue
@@ -107,34 +116,65 @@ loop:
 		default:
 			// nil
 		}
-		size := len(line)
-		log.Println("sending header...")
-		//
-		this.wheader.SetSize(uint32(size))
-		log.Println(this.wheader)
-		//
-		n, err = writer.Write(this.wheader[:])
-		if err != nil || n != len(this.wheader) {
-			log.Println(err.Error())
-			break loop
+		var ok bool
+		switch line {
+		case "register":
+			log.Println("register")
+		default:
+			log.Println("ping")
+			ok = this.ping()
 		}
-		log.Println(n, "bytes sent")
-		//
-		log.Println("sending message...")
-		n, err = writer.WriteString(line)
-		if err != nil || n != size {
-			log.Println(err.Error())
-			break loop
+		if ok != true {
+			log.Println("error")
+			return
 		}
-		log.Println(n, "bytes sent")
-		err = writer.Flush()
-		if err != nil {
-			log.Println(err.Error())
-			break loop
-		}
-		//
 		this.incoming <- "yes"
 	}
+}
+
+//
+func (this *Client) register() bool {
+
+	return false
+}
+
+//
+func (this *Client) ping() bool {
+	var n int
+	request := &message.Request{}
+	proto.SetDefaults(request)
+	message, err := proto.Marshal(request)
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	//size := proto.Size(request)
+	size := len(message)
+	log.Println("sending header...")
+	//
+	this.wheader.SetSize(uint32(size))
+	log.Println(this.wheader)
+	//
+	n, err = this.writer.Write(this.wheader[:])
+	if err != nil || n != len(this.wheader) {
+		log.Println(err.Error())
+		return false
+	}
+	log.Println(n, "bytes sent")
+	//
+	log.Println("sending message...")
+	n, err = this.writer.Write(message)
+	if err != nil || n != size {
+		log.Println(err.Error())
+		return false
+	}
+	log.Println(n, "bytes sent")
+	err = this.writer.Flush()
+	if err != nil {
+		log.Println(err.Error())
+		return false
+	}
+	return true
 }
 
 //
@@ -150,6 +190,8 @@ func NewClient() *Client {
 		wheader:  server.NewTinyHeader(),
 		incoming: make(chan string),
 		outgoing: make(chan string),
+		reader:   nil,
+		writer:   nil,
 	}
 
 	return client

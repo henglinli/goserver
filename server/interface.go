@@ -60,7 +60,7 @@ type Server interface {
 	// open db
 	OpenDB(string) error
 	// serve connections
-	Serve() error
+	Serve()
 	// close db
 	CloseDB()
 	// stop Server

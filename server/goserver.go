@@ -6,10 +6,12 @@ import (
 	"code.google.com/p/leveldb-go/leveldb"
 	"log"
 	"net"
+	"time"
 )
 
 // go server
 type GoServer struct {
+	err         error
 	stop        chan int
 	address     string
 	connections chan net.Conn
@@ -93,17 +95,27 @@ func (this *GoServer) clear() {
 func (this *GoServer) Stop() {
 	defer close(this.stop)
 	//
-	log.Println("stopping server...")
+	log.Println("error:", this.err.Error())
+	log.Println("stopping server ...")
 	this.stop <- 1
 }
 
+//
+func (this *GoServer) SetDefaultOptions(conn *net.TCPConn) {
+	conn.SetKeepAlive(true)
+	interval, err := time.ParseDuration("45s")
+	if err != nil {
+		conn.SetKeepAlivePeriod(interval)
+	}
+	conn.SetNoDelay(true)
+}
+
 // serve
-func (this *GoServer) Serve() error {
-	var err error
+func (this *GoServer) Serve() {
 	go func() {
 		// open db
-		err = this.OpenDB(kDataBasePath)
-		if err != nil {
+		this.err = this.OpenDB(kDataBasePath)
+		if this.err != nil {
 			return
 		}
 		// handle connections
@@ -111,15 +123,21 @@ func (this *GoServer) Serve() error {
 		// clear
 		defer this.clear()
 		// listen remote
-		ln, e := net.Listen("tcp", this.address)
-		if err != nil {
-			// handle error
-			log.Println("net.Listen error: ", err.Error())
-			err = e
+		laddr, err1 := net.ResolveTCPAddr("tcp", this.address)
+		if err1 != nil {
+			log.Println(err1.Error())
+			this.err = err1
+			return
+		}
+		// listen
+		listener, err2 := net.ListenTCP("tcp", laddr)
+		if err1 != nil {
+			log.Println(err2.Error())
+			this.err = err2
 			return
 		}
 		// close listener
-		defer ln.Close()
+		defer listener.Close()
 		// accept
 		for {
 			select {
@@ -130,16 +148,17 @@ func (this *GoServer) Serve() error {
 				// continue
 			}
 			// accept
-			conn, err := ln.Accept()
+			conn, err := listener.AcceptTCP()
 			if err != nil {
 				// handle error
-				log.Println("net.Listen error: ", err.Error())
+				log.Println(err.Error())
+				this.err = err
 				continue
 			}
+			//
+			this.SetDefaultOptions(conn)
 			//
 			this.connections <- conn
 		}
 	}()
-	//
-	return err
 }

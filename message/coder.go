@@ -29,7 +29,7 @@ func (this *ProtobufCoder) Decode(in []byte) (interface{}, error) {
 	err := proto.Unmarshal(in, request)
 	if err != nil {
 		this.logger.Println(err.Error())
-		return nil, errors.New("Illegal protocol")
+		return nil, err
 	}
 	//
 	return request, nil
@@ -37,12 +37,16 @@ func (this *ProtobufCoder) Decode(in []byte) (interface{}, error) {
 
 // encode
 func (this *ProtobufCoder) Encode(in interface{}) ([]byte, error) {
-	response := in.(*Response)
+	response, ok := in.(*Response)
+	if ok != true {
+		this.logger.Println("Bad message.Response type")
+		return nil, errors.New("Bad message.Response type")
+	}
 	//
 	message, err := proto.Marshal(response)
 	if err != nil {
-		this.logger.Println(err.Error)
-		return []byte("Internal Error: proto.Marshal"), nil
+		this.logger.Println(err.Error())
+		return nil, err
 	}
 	//
 	return message, nil
